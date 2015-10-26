@@ -117,6 +117,42 @@ void SymmCipher::cbc_decrypt(byte* data, unsigned len, const byte* iv)
 }
 
 /**
+ * @brief Encrypt symmetrically using AES in CBC mode and pkcs padding
+ *
+ * The size of the IV is one block in AES-128 (16 bytes).
+ *
+ * @param data Data to be encrypted
+ * @param iv Initialisation vector.
+ * @param result Encrypted message
+ * @return Void.
+ */
+void SymmCipher::cbc_encrypt_pkcs_padding(const string *data, const byte *iv, string *result)
+{
+    aescbc_e.Resynchronize(iv ? iv : zeroiv);
+    StringSource(*data, true,
+           new CryptoPP::StreamTransformationFilter( aescbc_e, new StringSink( *result ),
+                                                     CryptoPP::StreamTransformationFilter::PKCS_PADDING));
+}
+
+/**
+ * @brief Decrypt symmetrically using AES in CBC mode and pkcs padding
+ *
+ * The size of the IV is one block in AES-128 (16 bytes).
+ *
+ * @param data Data to be decrypted
+ * @param iv Initialisation vector.
+ * @param result Decrypted message
+ * @return Void.
+ */
+void SymmCipher::cbc_decrypt_pkcs_padding(const std::string *data, const byte *iv, string *result)
+{
+    aescbc_d.Resynchronize(iv ? iv : zeroiv);
+    StringSource(*data, true,
+           new CryptoPP::StreamTransformationFilter( aescbc_d, new StringSink( *result ),
+                                                     CryptoPP::StreamTransformationFilter::PKCS_PADDING));
+}
+
+/**
  * @brief Encrypt symmetrically using AES in ECB mode.
  *
  * @param data Data to be encrypted.
@@ -240,6 +276,30 @@ void SymmCipher::gcm_decrypt(byte* data, unsigned len, const byte* iv, int ivLen
     aesgcm_d.ProcessData(data, data, len);
 }
 
+void SymmCipher::serializekeyforjs(string *d)
+{
+    char invertedkey[BLOCKSIZE];
+    std::stringstream ss;
+
+    ss << "[";
+    for (int i=0; i<BLOCKSIZE; i++)
+    {
+        invertedkey[i] = key[BLOCKSIZE - i - 1];
+    }
+
+    int32_t *k = (int32_t *)invertedkey;
+    for (int i = 3; i >= 0; i--)
+    {
+        ss << k[i];
+        if (i)
+        {
+            ss << ",";
+        }
+    }
+    ss << "]";
+    *d = ss.str();
+}
+
 void SymmCipher::setint64(int64_t value, byte* data)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -282,6 +342,17 @@ void SymmCipher::incblock(byte* dst, unsigned len)
     }
 }
 
+SymmCipher::SymmCipher(const SymmCipher &ref)
+{
+    setkey(ref.key);
+}
+
+SymmCipher& SymmCipher::operator=(const SymmCipher& ref)
+{
+    setkey(ref.key);
+    return *this;
+}
+
 // encryption: data must be NUL-padded to BLOCKSIZE
 // decryption: data must be padded to BLOCKSIZE
 // len must be < 2^31
@@ -304,8 +375,12 @@ void SymmCipher::ctr_crypt(byte* data, unsigned len, m_off_t pos, ctr_iv ctriv, 
     {
         if (encrypt)
         {
-            xorblock(data, mac);
-            ecb_encrypt(mac);
+            if(mac)
+            {
+                xorblock(data, mac);
+                ecb_encrypt(mac);
+            }
+
             ecb_encrypt(ctr, tmp);
             xorblock(tmp, data);
         }
@@ -583,6 +658,17 @@ void Hash::get(string* out)
     hash.Final((byte*)out->data());
 }
 
+void HashSHA256::add(const byte *data, unsigned int len)
+{
+    hash.Update(data, len);
+}
+
+void HashSHA256::get(std::string *retStr)
+{
+    retStr->resize(hash.DigestSize());
+    hash.Final((byte*)retStr->data());
+}
+
 void HashCRC32::add(const byte* data, unsigned len)
 {
     hash.Update(data, len);
@@ -592,4 +678,21 @@ void HashCRC32::get(byte* out)
 {
     hash.Final(out);
 }
+
+HMACSHA256::HMACSHA256(const byte *key, size_t length)
+    : hmac(key, length)
+{
+
+}
+
+void HMACSHA256::add(const byte *data, unsigned len)
+{
+    hmac.Update(data, len);
+}
+
+void HMACSHA256::get(byte *out)
+{
+    hmac.Final(out);
+}
+
 } // namespace

@@ -49,6 +49,7 @@
 #include <iterator>
 #include <queue>
 #include <list>
+#include <functional>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,7 +71,9 @@
 #include <shellapi.h>
 
 #define atoll _atoi64
-#define snprintf _snprintf
+#define snprintf mega_snprintf
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
 #define _CRT_SECURE_NO_WARNINGS
 
 // FIXME: move to auto-generated file
@@ -79,7 +82,7 @@
 #endif
 
 #ifndef MEGA_MINOR_VERSION
-#define MEGA_MINOR_VERSION 5
+#define MEGA_MINOR_VERSION 6
 #endif
 
 #ifndef MEGA_MICRO_VERSION

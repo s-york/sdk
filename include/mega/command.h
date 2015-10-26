@@ -100,7 +100,6 @@ struct MEGA_API HttpReqCommandPutFA : public HttpReq, public Command
 class MEGA_API CommandGetFA : public Command
 {
     int part;
-    handle fahref;
 
 public:
     void procresult();
@@ -111,11 +110,12 @@ public:
 class MEGA_API CommandLogin : public Command
 {
     bool checksession;
+    int sessionversion;
 
 public:
     void procresult();
 
-    CommandLogin(MegaClient*, const char*, uint64_t);
+    CommandLogin(MegaClient*, const char*, uint64_t, const byte* = NULL,  int = 0);
 };
 
 class MEGA_API CommandSetMasterKey : public Command
@@ -203,7 +203,7 @@ class MEGA_API CommandGetUA : public Command
 {
     int priv;
     User* user;
-    char* attributename;
+    string attributename;
 
 public:
     CommandGetUA(MegaClient*, const char*, const char*, int);
@@ -243,12 +243,14 @@ public:
 class MEGA_API CommandMoveNode : public Command
 {
     handle h;
+    handle pp;
+    bool syncop;
     syncdel_t syncdel;
 
 public:
     void procresult();
 
-    CommandMoveNode(MegaClient*, Node*, Node*, syncdel_t);
+    CommandMoveNode(MegaClient*, Node*, Node*, syncdel_t, handle = UNDEF);
 };
 
 class MEGA_API CommandSingleKeyCR : public Command
@@ -265,6 +267,25 @@ public:
     void procresult();
 
     CommandDelNode(MegaClient*, handle);
+};
+
+class MEGA_API CommandKillSessions : public Command
+{
+    handle h;
+
+public:
+    void procresult();
+
+    CommandKillSessions(MegaClient*, handle);
+    CommandKillSessions(MegaClient*);
+};
+
+class MEGA_API CommandLogout : public Command
+{
+public:
+    void procresult();
+
+    CommandLogout(MegaClient*);
 };
 
 class MEGA_API CommandPubKeyRequest : public Command
@@ -298,7 +319,7 @@ public:
     void cancel();
     void procresult();
 
-    CommandGetFile(TransferSlot*, byte*, handle, bool);
+    CommandGetFile(TransferSlot*, byte*, handle, bool, const char* = NULL);
 };
 
 class MEGA_API CommandPutFile : public Command
@@ -340,11 +361,13 @@ public:
 class MEGA_API CommandSetAttr : public Command
 {
     handle h;
+    string pa;
+    bool syncop;
 
 public:
     void procresult();
 
-    CommandSetAttr(MegaClient*, Node*, SymmCipher*);
+    CommandSetAttr(MegaClient*, Node*, SymmCipher*, const char* = NULL);
 };
 
 class MEGA_API CommandSetShare : public Command
@@ -352,13 +375,43 @@ class MEGA_API CommandSetShare : public Command
     handle sh;
     User* user;
     accesslevel_t access;
+    string msg;
+    string personal_representation;
 
     bool procuserresult(MegaClient*);
 
 public:
     void procresult();
 
-    CommandSetShare(MegaClient*, Node*, User*, accesslevel_t, int);
+    CommandSetShare(MegaClient*, Node*, User*, accesslevel_t, int, const char*, const char* = NULL);
+};
+
+class MEGA_API CommandGetUserData : public Command
+{
+public:
+    void procresult();
+
+    CommandGetUserData(MegaClient*);
+};
+
+class MEGA_API CommandSetPendingContact : public Command
+{
+    opcactions_t action;
+
+public:
+    void procresult();
+
+    CommandSetPendingContact(MegaClient*, const char*, opcactions_t, const char* = NULL, const char* = NULL);
+};
+
+class MEGA_API CommandUpdatePendingContact : public Command
+{
+    ipcactions_t action;
+
+public:
+    void procresult();
+
+    CommandUpdatePendingContact(MegaClient*, handle, ipcactions_t);
 };
 
 class MEGA_API CommandGetUserQuota : public Command
@@ -408,7 +461,7 @@ class MEGA_API CommandSetPH : public Command
 public:
     void procresult();
 
-    CommandSetPH(MegaClient*, Node*, int);
+    CommandSetPH(MegaClient*, Node*, int, m_time_t);
 };
 
 class MEGA_API CommandGetPH : public Command
@@ -454,6 +507,99 @@ public:
 
     CommandReportEvent(MegaClient*, const char*, const char*);
 };
+
+class MEGA_API CommandLoadBalancing : public Command
+{
+public:
+    string service;
+
+    void procresult();
+
+    CommandLoadBalancing(MegaClient*, const char*);
+};
+
+class MEGA_API CommandSubmitPurchaseReceipt : public Command
+{
+public:
+    void procresult();
+
+    CommandSubmitPurchaseReceipt(MegaClient*, int, const char*);
+};
+
+class MEGA_API CommandCreditCardStore : public Command
+{
+
+    /*
+        'a':'ccs',  // credit card store
+        'cc':<encrypted CC data of the required json format>,
+        'last4':<last four digits of the credit card number, plain text>,
+        'expm':<expiry month in the form "02">,
+        'expy':<expiry year in the form "2017">,
+        'hash':<sha256 hash of the card details in hex format>
+    */
+
+public:
+    void procresult();
+
+    CommandCreditCardStore(MegaClient*, const char *, const char *, const char *, const char *, const char *);
+};
+
+class MEGA_API CommandCreditCardQuerySubscriptions : public Command
+{
+public:
+    void procresult();
+
+    CommandCreditCardQuerySubscriptions(MegaClient*);
+};
+
+class MEGA_API CommandCreditCardCancelSubscriptions : public Command
+{
+public:
+    void procresult();
+
+    CommandCreditCardCancelSubscriptions(MegaClient*, const char* = NULL);
+};
+
+class MEGA_API CommandCopySession : public Command
+{
+public:
+    void procresult();
+
+    CommandCopySession(MegaClient*);
+};
+
+class MEGA_API CommandGetPaymentMethods : public Command
+{
+public:
+    void procresult();
+
+    CommandGetPaymentMethods(MegaClient*);
+};
+
+class MEGA_API CommandUserFeedbackStore : public Command
+{
+public:
+    void procresult();
+
+    CommandUserFeedbackStore(MegaClient*, const char *, const char *, const char *);
+};
+
+class MEGA_API CommandSendEvent : public Command
+{
+public:
+    void procresult();
+
+    CommandSendEvent(MegaClient*, int, const char *);
+};
+
+class MEGA_API CommandCleanRubbishBin : public Command
+{
+public:
+    void procresult();
+
+    CommandCleanRubbishBin(MegaClient*);
+};
+
 } // namespace
 
 #endif

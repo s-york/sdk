@@ -65,6 +65,9 @@ struct MEGA_API File: public FileFingerprint
     // source handle private?
     bool hprivate;
 
+    // special auth to access the node
+    string auth;
+
     // is this part of a sync transfer?
     bool syncxfer;
 
@@ -90,6 +93,7 @@ struct MEGA_API SyncFileGet: public File
     // set sync-specific temp filename, update treestate
     void prepare();
     bool failed(error);
+    void progress();
 
     // update localname (may have changed due to renames/moves of the synced files)
     void updatelocalname();

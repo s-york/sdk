@@ -27,6 +27,7 @@
 #include "mega/base64.h"
 #include "mega/megaapp.h"
 #include "mega/utils.h"
+#include "mega/logging.h"
 
 namespace mega {
 TransferSlot::TransferSlot(Transfer* ctransfer)
@@ -97,6 +98,29 @@ TransferSlot::~TransferSlot()
     delete[] reqs;
 }
 
+void TransferSlot::toggleport(HttpReqXfer *req)
+{
+    if (!memcmp(req->posturl.c_str(), "http:", 5))
+    {
+       size_t portendindex = req->posturl.find("/", 8);
+       size_t portstartindex = req->posturl.find(":", 8);
+
+       if (portendindex != string::npos)
+       {
+           if (portstartindex == string::npos)
+           {
+               LOG_debug << "Enabling alternative port for chunk";
+               req->posturl.insert(portendindex, ":8080");
+           }
+           else
+           {
+               LOG_debug << "Disabling alternative port for chunk";
+               req->posturl.erase(portstartindex, portendindex - portstartindex);
+           }
+       }
+    }
+}
+
 // abort all HTTP connections
 void TransferSlot::disconnect()
 {
@@ -152,6 +176,11 @@ void TransferSlot::doio(MegaClient* client)
     time_t backoff = 0;
     m_off_t p = 0;
 
+    if (errorcount > 4)
+    {
+        return transfer->failed(API_EFAILED);
+    }
+
     for (int i = connections; i--; )
     {
         if (reqs[i])
@@ -189,6 +218,8 @@ void TransferSlot::doio(MegaClient* client)
                                 }
                             }
 
+                            progresscompleted -= reqs[i]->size;
+
                             // fail with returned error
                             return transfer->failed((error)atoi(reqs[i]->in.c_str()));
                         }
@@ -210,12 +241,14 @@ void TransferSlot::doio(MegaClient* client)
                                 }
                                 else
                                 {
+                                    progresscompleted -= reqs[i]->size;
                                     return transfer->failed(API_EKEY);
                                 }
                             }
                         }
                         else
                         {
+                            progresscompleted -= reqs[i]->size;
                             errorcount++;
                             reqs[i]->status = REQ_PREPARED;
                             break;
@@ -238,7 +271,27 @@ void TransferSlot::doio(MegaClient* client)
                         if (!failure)
                         {
                             failure = true;
+                            bool changeport = false;
+
+                            if (transfer->type == GET && client->autodownport)
+                            {
+                                LOG_debug << "Automatically changing download port";
+                                client->usealtdownport = !client->usealtdownport;
+                                changeport = true;
+                            }
+                            else if (transfer->type == PUT && client->autoupport)
+                            {
+                                LOG_debug << "Automatically changing upload port";
+                                client->usealtupport = !client->usealtupport;
+                                changeport = true;
+                            }
+
                             client->setchunkfailed(&reqs[i]->posturl);
+
+                            if (changeport)
+                            {
+                                toggleport(reqs[i]);
+                            }
                         }
 
                         reqs[i]->status = REQ_PREPARED;
@@ -267,7 +320,28 @@ void TransferSlot::doio(MegaClient* client)
                         reqs[i] = transfer->type == PUT ? (HttpReqXfer*)new HttpReqUL() : (HttpReqXfer*)new HttpReqDL();
                     }
 
-                    if (reqs[i]->prepare(fa, tempurl.c_str(), &transfer->key,
+                    string finaltempurl = tempurl;
+                    if (transfer->type == GET && client->usealtdownport
+                            && !memcmp(tempurl.c_str(), "http:", 5))
+                    {
+                        size_t index = tempurl.find("/", 8);
+                        if(index != string::npos && tempurl.find(":", 8) == string::npos)
+                        {
+                            finaltempurl.insert(index, ":8080");
+                        }
+                    }
+
+                    if (transfer->type == PUT && client->usealtupport
+                            && !memcmp(tempurl.c_str(), "http:", 5))
+                    {
+                        size_t index = tempurl.find("/", 8);
+                        if(index != string::npos && tempurl.find(":", 8) == string::npos)
+                        {
+                            finaltempurl.insert(index, ":8080");
+                        }
+                    }
+
+                    if (reqs[i]->prepare(fa, finaltempurl.c_str(), &transfer->key,
                                          &transfer->chunkmacs, transfer->ctriv,
                                          transfer->pos, npos))
                     {
@@ -276,6 +350,7 @@ void TransferSlot::doio(MegaClient* client)
                     }
                     else
                     {
+                        LOG_warn << "Error preparing transfer: " << fa->retry;
                         if (!fa->retry)
                         {
                             return transfer->failed(API_EREAD);
@@ -311,29 +386,49 @@ void TransferSlot::doio(MegaClient* client)
     if (Waiter::ds - lastdata >= XFERTIMEOUT && !failure)
     {
         failure = true;
+        bool changeport = false;
+
+        if (transfer->type == GET && client->autodownport)
+        {
+            LOG_debug << "Automatically changing download port due to a timeout";
+            client->usealtdownport = !client->usealtdownport;
+            changeport = true;
+        }
+        else if (transfer->type == PUT && client->autoupport)
+        {
+            LOG_debug << "Automatically changing upload port due to a timeout";
+            client->usealtupport = !client->usealtupport;
+            changeport = true;
+        }
+
+        client->app->transfer_failed(transfer, API_EFAILED);
 
         for (int i = connections; i--; )
         {
-            if (reqs[i])
+            if (reqs[i] && reqs[i]->status == REQ_INFLIGHT)
             {
                 client->setchunkfailed(&reqs[i]->posturl);
+                reqs[i]->disconnect();
+
+                if (changeport)
+                {
+                    toggleport(reqs[i]);
+                }
+
+                reqs[i]->status = REQ_PREPARED;
             }
         }
     }
 
-    if (errorcount > 10)
+    if (!failure)
     {
-        return transfer->failed(API_EFAILED);
-    }
-    else
-    {
-        if (!backoff)
+        if (!backoff && (Waiter::ds - lastdata) < XFERTIMEOUT)
         {
             // no other backoff: check again at XFERMAXFAIL
             backoff = XFERTIMEOUT - (Waiter::ds - lastdata);
         }
 
-        transfer->bt.backoff(backoff);
+        retrybt.backoff(backoff);
     }
 }
 

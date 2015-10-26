@@ -104,6 +104,22 @@ typedef NS_ENUM (NSInteger, MEGATransferType) {
 @property (readonly, nonatomic) uint64_t parentHandle;
 
 /**
+ * @brief The starting position of the transfer for streaming downloads
+ *
+ * The value of this fuction will be 0 if the transfer isn't a streaming
+ * download ([MEGASdk startStreamingNode:startPos:size:])
+ */
+@property (readonly, nonatomic) NSNumber *startPos;
+
+/**
+ * @brief The end position of the transfer for streaming downloads
+ *
+ * The value of this fuction will be 0 if the transfer isn't a streaming
+ * download ([MEGASdk startStreamingNode:startPos:size:])
+ */
+@property (readonly, nonatomic) NSNumber *endPos;
+
+/**
  * @brief Name of the file that is being transferred.
  *
  * It's possible to upload a file with a different name ([MEGASdk startUploadWithLocalPath:parent:]). In that case,
@@ -115,12 +131,12 @@ typedef NS_ENUM (NSInteger, MEGATransferType) {
 /**
  * @brief Number of times that a transfer has temporarily failed.
  */
-@property (readonly, nonatomic) NSInteger  numRetry ;
+@property (readonly, nonatomic) NSInteger  numRetry;
 
 /**
  * @brief Maximum number of times that the transfer will be retried.
  */
-@property (readonly, nonatomic) NSInteger  maxRetries ;
+@property (readonly, nonatomic) NSInteger  maxRetries;
 
 /**
  * @brief An integer that identifies this transfer.
@@ -160,7 +176,7 @@ typedef NS_ENUM (NSInteger, MEGATransferType) {
  * @return YES if this is a streaming transfer, NO otherwise
  * @see [MEGASdk startStreamingNode:startPos:size:];
  */
-@property (readonly, nonatomic) BOOL isStreammingTransfer;
+@property (readonly, nonatomic) BOOL isStreamingTransfer;
 
 /**
  * @brief Creates a copy of this MEGATransfer object

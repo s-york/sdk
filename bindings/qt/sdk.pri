@@ -31,8 +31,8 @@ SOURCES += src/attrmap.cpp \
     src/logging.cpp \
     src/waiterbase.cpp  \
     src/proxy.cpp \
+    src/pendingcontactrequest.cpp \
     src/crypto/cryptopp.cpp  \
-    src/crypto/sodium.cpp  \
     src/db/sqlite.cpp  \
     src/gfx/qt.cpp \
     src/gfx/external.cpp \
@@ -41,9 +41,11 @@ SOURCES += src/attrmap.cpp \
     src/megaapi_impl.cpp \
     bindings/qt/QTMegaRequestListener.cpp \
     bindings/qt/QTMegaTransferListener.cpp \
+    bindings/qt//QTMegaGlobalListener.cpp \
+    bindings/qt/QTMegaSyncListener.cpp \
     bindings/qt/QTMegaListener.cpp \
     bindings/qt/QTMegaEvent.cpp \
-    third_party/utf8proc/utf8proc.cpp
+    src/mega_utf8proc.cpp
 
 win32 {
 SOURCES += src/win32/net.cpp  \
@@ -90,8 +92,8 @@ HEADERS  += include/mega.h \
             include/mega/logging.h \
             include/mega/waiter.h \
             include/mega/proxy.h \
+            include/mega/pendingcontactrequest.h \
             include/mega/crypto/cryptopp.h  \
-            include/mega/crypto/sodium.h  \
             include/mega/db/sqlite.h  \
             include/mega/gfx/qt.h \
             include/mega/gfx/external.h \
@@ -101,9 +103,11 @@ HEADERS  += include/mega.h \
             include/megaapi_impl.h \
             bindings/qt/QTMegaRequestListener.h \
             bindings/qt/QTMegaTransferListener.h \
+            bindings/qt//QTMegaGlobalListener.h \
+            bindings/qt/QTMegaSyncListener.h \
             bindings/qt/QTMegaListener.h \
             bindings/qt/QTMegaEvent.h \
-            third_party/utf8proc/utf8proc.h
+            include/mega/mega_utf8proc.h
 
 win32 {
     HEADERS  += include/mega/win32/meganet.h  \
@@ -125,10 +129,9 @@ unix {
             include/mega/config.h
 }
 
-DEFINES += USE_SQLITE USE_CRYPTOPP USE_SODIUM USE_QT MEGA_QT_LOGGING ENABLE_SYNC
+DEFINES += USE_SQLITE USE_CRYPTOPP USE_QT MEGA_QT_LOGGING ENABLE_SYNC
 LIBS += -lcryptopp
 INCLUDEPATH += $$MEGASDK_BASE_PATH/include
-INCLUDEPATH += $$MEGASDK_BASE_PATH/third_party/utf8proc
 INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt
 INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include
 
@@ -141,11 +144,10 @@ else {
 
 win32 {
     INCLUDEPATH += $$[QT_INSTALL_PREFIX]/src/3rdparty/zlib
+    INCLUDEPATH += $$[QT_INSTALL_PREFIX]/../src/qtbase/src/3rdparty/zlib
     INCLUDEPATH += $$MEGASDK_BASE_PATH/include/mega/win32
     INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/cryptopp
-    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/libsodium
-    DEFINES += SODIUM_STATIC PCRE_STATIC
-    LIBS += -lsodium
+    DEFINES += PCRE_STATIC
 
     contains(CONFIG, BUILDX64) {
 	release {
@@ -172,6 +174,10 @@ unix:!macx {
    INCLUDEPATH += $$MEGASDK_BASE_PATH/include/mega/posix
    INCLUDEPATH += /usr/include/cryptopp
 
+   DEFINES += USE_SODIUM
+   HEADERS += ./include/mega/crypto/sodium.h
+   SOURCES += ./src/crypto/sodium.cpp
+
    LIBS += -lsqlite3 -lrt
 
    exists($$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a) {
@@ -179,13 +185,11 @@ unix:!macx {
     LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a -lz -lssl -lcrypto -lcares
    }
    else {
-    LIBS += -lcurl
+    LIBS += -lcurl -lz -lssl -lcrypto -lcares
    }
 
    exists($$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a) {
-    DEFINES += SODIUM_STATIC PCRE_STATIC
-    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/sodium
-    LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a
+    LIBS +=  $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a
    }
    else {
     LIBS += -lsodium
@@ -198,15 +202,6 @@ macx {
    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/cryptopp
    SOURCES += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/qt/libs/sqlite3.c
    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/curl
-
-   exists($$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a) {
-    DEFINES += SODIUM_STATIC PCRE_STATIC
-    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/sodium
-    LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a
-   }
-   else {
-    LIBS += -lsodium
-   }
-
+   DEFINES += PCRE_STATIC _DARWIN_FEATURE_64_BIT_INODE
    LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcares.a $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a -lz -lssl -lcrypto
 }

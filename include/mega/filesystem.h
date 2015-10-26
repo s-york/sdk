@@ -85,6 +85,13 @@ struct MEGA_API FileAccess
     virtual ~FileAccess() { }
 };
 
+struct MEGA_API InputStreamAccess
+{
+    virtual m_off_t size() = 0;
+    virtual bool read(byte *, unsigned) = 0;
+    virtual ~InputStreamAccess() { }
+};
+
 // generic host directory enumeration
 struct MEGA_API DirAccess
 {
@@ -191,7 +198,7 @@ struct MEGA_API FileSystemAccess : public EventTrigger
     static void captimestamp(m_time_t*);
     
     // set mtime
-    virtual bool setmtimelocal(string *, m_time_t) const = 0;
+    virtual bool setmtimelocal(string *, m_time_t) = 0;
 
     // change working directory
     virtual bool chdirlocal(string*) const = 0;
@@ -201,6 +208,9 @@ struct MEGA_API FileSystemAccess : public EventTrigger
 
     // obtain lowercased extension
     virtual bool getextension(string*, char*, int) const = 0;
+
+    // check if synchronization is supported for a specific path
+    virtual bool issyncsupported(string*) { return true; }
 
     // add notification (has to be called for all directories in tree for full crossplatform support)
     virtual void addnotify(LocalNode*, string*) { }

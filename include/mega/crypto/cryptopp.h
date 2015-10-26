@@ -35,6 +35,7 @@
 #include <cryptopp/crc.h>
 #include <cryptopp/nbtheory.h>
 #include <cryptopp/algparam.h>
+#include <cryptopp/hmac.h>
 
 namespace mega {
 using namespace std;
@@ -141,12 +142,36 @@ public:
      *
      * The size of the IV is one block in AES-128 (16 bytes).
      *
-     * @param data Data to be encrypted (encryption in-place).
+     * @param data Data to be decrypted (encryption in-place).
      * @param len Length of cipher text to be decrypted in bytes.
      * @param iv Initialisation vector.
      * @return Void.
      */
     void cbc_decrypt(byte* data, unsigned len, const byte* iv = NULL);
+
+    /**
+     * @brief Encrypt symmetrically using AES in CBC mode and pkcs padding
+     *
+     * The size of the IV is one block in AES-128 (16 bytes).
+     *
+     * @param data Data to be encrypted
+     * @param iv Initialisation vector.
+     * @param result Encrypted message
+     * @return Void.
+     */
+    void cbc_encrypt_pkcs_padding(const string *data, const byte* iv, string *result);
+
+    /**
+     * @brief Decrypt symmetrically using AES in CBC mode and pkcs padding
+     *
+     * The size of the IV is one block in AES-128 (16 bytes).
+     *
+     * @param data Data to be decrypted
+     * @param iv Initialisation vector.
+     * @param result Decrypted message
+     * @return Void.
+     */
+    void cbc_decrypt_pkcs_padding(const string *data, const byte* iv, string *result);
 
     /**
      * @brief Authenticated symmetric encryption using AES in CCM mode
@@ -225,6 +250,16 @@ public:
      */
     void gcm_decrypt(byte* data, unsigned len, const byte* iv, int ivLength);
 
+    /**
+     * @brief Serialize key for compatibility with the webclient
+     *
+     * The key is serialized to a JSON array like this one:
+     * "[669070598,-250738112,2059051645,-1942187558]"
+     *
+     * @param d string that receives the serialized key
+     */
+    void serializekeyforjs(string *);
+
     void ctr_crypt(byte *, unsigned, m_off_t, ctr_iv, byte *, bool);
 
     static void setint64(int64_t, byte*);
@@ -235,6 +270,8 @@ public:
     static void incblock(byte*, unsigned = BLOCKSIZE);
 
     SymmCipher() { }
+    SymmCipher(const SymmCipher& ref);
+    SymmCipher& operator=(const SymmCipher& ref);
     SymmCipher(const byte*);
 };
 
@@ -351,6 +388,15 @@ public:
     void get(string*);
 };
 
+class MEGA_API HashSHA256
+{
+    CryptoPP::SHA256 hash;
+
+public:
+    void add(const byte*, unsigned int);
+    void get(string*);
+};
+
 class MEGA_API HashCRC32
 {
     CryptoPP::CRC32 hash;
@@ -359,6 +405,37 @@ public:
     void add(const byte*, unsigned);
     void get(byte*);
 };
+
+/**
+ * @brief HMAC-SHA256 generator
+ */
+class MEGA_API HMACSHA256
+{
+    CryptoPP::HMAC< CryptoPP::SHA256 > hmac;
+
+public:
+    /**
+     * @brief Constructor
+     * @param key HMAC key
+     * @param length Key length
+     */
+    HMACSHA256(const byte *key, size_t length);
+
+
+    /**
+     * @brief Add data to the HMAC
+     * @param data Data to add
+     * @param len Data length
+     */
+    void add(const byte* data, unsigned len);
+
+    /**
+     * @brief Compute the HMAC for the current message
+     * @param out The HMAC-SHA256 will be returned in the first 32 bytes of this buffer
+     */
+    void get(byte *out);
+};
+
 } // namespace
 
 #endif

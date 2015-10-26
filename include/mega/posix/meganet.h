@@ -23,8 +23,12 @@
 #define HTTPIO_CLASS CurlHttpIO
 
 #include "mega.h"
-#include <curl/curl.h>
+
+#if !defined(USE_CURL_PUBLIC_KEY_PINNING) || defined(WINDOWS_PHONE)
 #include <openssl/ssl.h>
+#endif
+
+#include <curl/curl.h>
 #include <ares.h>
 
 namespace mega {
@@ -34,11 +38,12 @@ struct MEGA_API CurlHttpContext;
 class CurlHttpIO: public HttpIO
 {
 protected:
-    string* useragent;
+    string useragent;
     CURLM* curlm;
     CURLSH* curlsh;
     ares_channel ares;
     string proxyurl;
+    string proxyscheme;
     string proxyhost;
     int proxyport;
     string proxyip;
@@ -58,14 +63,18 @@ protected:
     static size_t read_data(void*, size_t, size_t, void*);
     static size_t write_data(void*, size_t, size_t, void*);
     static size_t check_header(void*, size_t, size_t, void*);
+
+#if !defined(USE_CURL_PUBLIC_KEY_PINNING) || defined(WINDOWS_PHONE)
     static CURLcode ssl_ctx_function(CURL*, void*, void*);
     static int cert_verify_callback(X509_STORE_CTX*, void*);
+#endif
+
     static void proxy_ready_callback(void*, int, int, struct hostent*);
     static void ares_completed_callback(void*, int, int, struct hostent*);
     static void send_request(CurlHttpContext*);
     void request_proxy_ip();
     static struct curl_slist* clone_curl_slist(struct curl_slist*);
-    static bool crackurl(string*, string*, int*);
+    static bool crackurl(string*, string*, string*, int*);
     static int debug_callback(CURL*, curl_infotype, char*, size_t, void*);
     bool ipv6available();
 
@@ -108,6 +117,7 @@ struct MEGA_API CurlHttpContext
     struct curl_slist *headers;
     bool isIPv6;
     string hostname;
+    string scheme;
     int port;
     string hostheader;
     string hostip;

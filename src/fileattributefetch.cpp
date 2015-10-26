@@ -29,6 +29,9 @@ FileAttributeFetchChannel::FileAttributeFetchChannel()
     req.binary = true;
     req.status = REQ_READY;
     urltime = 0;
+    fahref = UNDEF;
+    inbytes = 0;
+    e = API_EINTERNAL;
 }
 
 FileAttributeFetch::FileAttributeFetch(handle h, fatype t, int ctag)
@@ -68,6 +71,7 @@ void FileAttributeFetchChannel::dispatch(MegaClient* client)
 
     if (req.outbuf.size())
     {
+        e = API_EFAILED;
         inbytes = 0;
         req.in.clear();
         req.posturl = posturl;
@@ -156,7 +160,7 @@ void FileAttributeFetchChannel::failed(MegaClient* client)
     {
         client->restag = it->second->tag;
 
-        if (client->app->fa_failed(it->second->nodehandle, it->second->type, it->second->retries))
+        if (client->app->fa_failed(it->second->nodehandle, it->second->type, it->second->retries, e))
         {
             // no retry desired
             delete it->second;
@@ -166,7 +170,11 @@ void FileAttributeFetchChannel::failed(MegaClient* client)
         {
             // retry
             it->second->retries++;
-            it++;
+
+            // move from pending to fresh
+            fafs[0][it->first] = it->second;
+            fafs[1].erase(it++);
+            req.status = REQ_PREPARED;
         }
     }
 }

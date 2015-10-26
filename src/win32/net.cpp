@@ -315,8 +315,15 @@ VOID CALLBACK WinHttpIO::asynccallback(HINTERNET hInternet, DWORD_PTR dwContext,
                 }
 
                 LOG_debug << "Request finished with HTTP status: " << req->httpstatus;
+                req->status = (req->httpstatus == 200
+                            && (req->contentlength < 0
+                             || req->contentlength == (req->buf ? req->bufpos : (int)req->in.size())))
+                             ? REQ_SUCCESS : REQ_FAILURE;
 
-                req->status = req->httpstatus == 200 ? REQ_SUCCESS : REQ_FAILURE;
+                if (req->status == REQ_SUCCESS)
+                {
+                    httpio->lastdata = Waiter::ds;
+                }
                 httpio->success = true;
             }
             else
@@ -512,6 +519,11 @@ VOID CALLBACK WinHttpIO::asynccallback(HINTERNET hInternet, DWORD_PTR dwContext,
 
         case WINHTTP_CALLBACK_STATUS_SENDING_REQUEST:
         {
+            if(MegaClient::disablepkp)
+            {
+                break;
+            }
+
             PCCERT_CONTEXT cert;
             DWORD len = sizeof cert;
 
@@ -526,7 +538,9 @@ VOID CALLBACK WinHttpIO::asynccallback(HINTERNET hInternet, DWORD_PTR dwContext,
                   && memcmp(pkey->pbData, "\x30\x82\x01\x0a\x02\x82\x01\x01\x00" APISSLMODULUS2
                                           "\x02" APISSLEXPONENTSIZE APISSLEXPONENT, 270)))
                 {
-                    LOG_err << "Certificate error. Possible MITM attack!!";
+                    LOG_err << "Invalid public key. Possible MITM attack!!";
+                    req->sslcheckfailed = true;
+
                     CertFreeCertificateContext(cert);
                     httpio->cancel(req);
                     httpio->httpevent();
@@ -534,10 +548,6 @@ VOID CALLBACK WinHttpIO::asynccallback(HINTERNET hInternet, DWORD_PTR dwContext,
                 }
 
                 CertFreeCertificateContext(cert);
-            }
-            else
-            {
-                LOG_verbose << "Unable to get server certificate. Code: " << GetLastError();
             }
 
             break;
@@ -641,7 +651,7 @@ void WinHttpIO::post(HttpReq* req, const char* data, unsigned len)
                                           (LPWSTR)proxyUsername.data(), (LPWSTR)proxyPassword.data(), NULL);
                 }
 
-                WinHttpSetTimeouts(httpctx->hRequest, 20000, 20000, 0, 0);
+                WinHttpSetTimeouts(httpctx->hRequest, 58000, 58000, 0, 0);
 
                 WinHttpSetStatusCallback(httpctx->hRequest, asynccallback,
                                          WINHTTP_CALLBACK_FLAG_DATA_AVAILABLE

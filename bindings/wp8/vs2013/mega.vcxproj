@@ -9,6 +9,30 @@
       <Configuration>Debug</Configuration>
       <Platform>ARM</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Emulator Debug|ARM">
+      <Configuration>Emulator Debug</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Emulator Debug|Win32">
+      <Configuration>Emulator Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Emulator Release|ARM">
+      <Configuration>Emulator Release</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Emulator Release|Win32">
+      <Configuration>Emulator Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release Emulator|ARM">
+      <Configuration>Release Emulator</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release Emulator|Win32">
+      <Configuration>Release Emulator</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|Win32">
       <Configuration>Release</Configuration>
       <Platform>Win32</Platform>
@@ -31,7 +55,17 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v110_wp80</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|ARM'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v110_wp80</PlatformToolset>
@@ -42,7 +76,31 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <PlatformToolset>v110_wp80</PlatformToolset>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|ARM'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <PlatformToolset>v110_wp80</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|ARM'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -59,16 +117,53 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <LibraryPath>$(ProjectDir)..\3rdparty\libs\Debug\ARM;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|ARM'">
+    <LibraryPath>$(ProjectDir)..\3rdparty\libs\Debug\ARM;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <LibraryPath>$(ProjectDir)..\3rdparty\libs\Release\ARM;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|ARM'">
+    <LibraryPath>$(ProjectDir)..\3rdparty\libs\Release\ARM;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|ARM'">
     <LibraryPath>$(ProjectDir)..\3rdparty\libs\Release\ARM;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LibraryPath>$(WP80ToolSetPath)lib;$(WindowsSDK_LibraryPath_x86);$(ProjectDir)..\3rdparty\libs\Release\Win32</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|Win32'">
+    <LibraryPath>$(WP80ToolSetPath)lib;$(WindowsSDK_LibraryPath_x86);$(ProjectDir)..\3rdparty\libs\Release\Win32</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|Win32'">
+    <LibraryPath>$(WP80ToolSetPath)lib;$(WindowsSDK_LibraryPath_x86);$(ProjectDir)..\3rdparty\libs\Release\Win32</LibraryPath>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LibraryPath>$(ProjectDir)..\3rdparty\libs\Debug\Win32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|Win32'">
+    <LibraryPath>$(ProjectDir)..\3rdparty\libs\Debug\Win32;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|Win32'">
     <ClCompile>
       <PreprocessorDefinitions>_WINRT_DLL;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -105,6 +200,42 @@
       <AdditionalDependencies>WindowsPhoneCore.lib;RuntimeObject.lib;PhoneAppModelHost.lib;sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;NDEBUG;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>WindowsPhoneCore.lib;RuntimeObject.lib;PhoneAppModelHost.lib;sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;NDEBUG;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>WindowsPhoneCore.lib;RuntimeObject.lib;PhoneAppModelHost.lib;sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>
       <PreprocessorDefinitions>_WINRT_DLL;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -124,7 +255,62 @@
       <AdditionalDependencies>sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Debug|ARM'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;NDEBUG;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Emulator Release|ARM'">
+    <ClCompile>
+      <PreprocessorDefinitions>_WINRT_DLL;NDEBUG;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <CompileAsWinRT>true</CompileAsWinRT>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\include;$(ProjectDir)..\include;$(ProjectDir)..\..\..\third_party\utf8proc;$(ProjectDir)..\..\..\include\mega\wp8;$(ProjectDir)..\3rdparty\include;$(ProjectDir)..\3rdparty\include\cares;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>ole32.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
+      <GenerateWindowsMetadata>true</GenerateWindowsMetadata>
+      <AdditionalDependencies>sqlite3.lib;cryptopp.lib;ws2_32.lib;libcurl.lib;ssleay32.lib;libeay32.lib;zlib.lib;cares.lib;FreeImage.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release Emulator|ARM'">
     <ClCompile>
       <PreprocessorDefinitions>_WINRT_DLL;NDEBUG;WINDOWS_PHONE;USE_CRYPTOPP;USE_SQLITE;CURL_STATICLIB;CARES_STATICLIB;USE_FREEIMAGE;FREEIMAGE_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -175,6 +361,7 @@
     <ClInclude Include="..\..\..\include\mega\megaapp.h" />
     <ClInclude Include="..\..\..\include\mega\megaclient.h" />
     <ClInclude Include="..\..\..\include\mega\node.h" />
+    <ClInclude Include="..\..\..\include\mega\pendingcontactrequest.h" />
     <ClInclude Include="..\..\..\include\mega\proxy.h" />
     <ClInclude Include="..\..\..\include\mega\pubkeyaction.h" />
     <ClInclude Include="..\..\..\include\mega\request.h" />
@@ -204,11 +391,19 @@
     <ClInclude Include="..\DelegateMRequestListener.h" />
     <ClInclude Include="..\DelegateMTransferListener.h" />
     <ClInclude Include="..\DelegateMTreeProcessor.h" />
+    <ClInclude Include="..\MAccountBalance.h" />
     <ClInclude Include="..\MAccountDetails.h" />
+    <ClInclude Include="..\MAccountPurchase.h" />
+    <ClInclude Include="..\MAccountSession.h" />
+    <ClInclude Include="..\MAccountTransaction.h" />
+    <ClInclude Include="..\MContactRequest.h" />
+    <ClInclude Include="..\MContactRequestList.h" />
     <ClInclude Include="..\MegaSDK.h" />
     <ClInclude Include="..\MError.h" />
     <ClInclude Include="..\MGfxProcessorInterface.h" />
     <ClInclude Include="..\MGlobalListenerInterface.h" />
+    <ClInclude Include="..\MInputStream.h" />
+    <ClInclude Include="..\MInputStreamAdapter.h" />
     <ClInclude Include="..\MListenerInterface.h" />
     <ClInclude Include="..\MLoggerInterface.h" />
     <ClInclude Include="..\MNode.h" />
@@ -248,8 +443,10 @@
     <ClCompile Include="..\..\..\src\megaapi.cpp" />
     <ClCompile Include="..\..\..\src\megaapi_impl.cpp" />
     <ClCompile Include="..\..\..\src\megaclient.cpp" />
+    <ClCompile Include="..\..\..\src\mega_utf8proc.cpp" />
     <ClCompile Include="..\..\..\src\node.cpp" />
     <ClCompile Include="..\..\..\src\posix\net.cpp" />
+    <ClCompile Include="..\..\..\src\pendingcontactrequest.cpp" />
     <ClCompile Include="..\..\..\src\proxy.cpp" />
     <ClCompile Include="..\..\..\src\pubkeyaction.cpp" />
     <ClCompile Include="..\..\..\src\request.cpp" />
@@ -266,7 +463,6 @@
     <ClCompile Include="..\..\..\src\waiterbase.cpp" />
     <ClCompile Include="..\..\..\src\win32\fs.cpp" />
     <ClCompile Include="..\..\..\src\wp8\waiter.cpp" />
-    <ClCompile Include="..\..\..\third_party\utf8proc\utf8proc.cpp" />
     <ClCompile Include="..\DelegateMGfxProcessor.cpp" />
     <ClCompile Include="..\DelegateMGlobalListener.cpp" />
     <ClCompile Include="..\DelegateMListener.cpp" />
@@ -274,9 +470,16 @@
     <ClCompile Include="..\DelegateMRequestListener.cpp" />
     <ClCompile Include="..\DelegateMTransferListener.cpp" />
     <ClCompile Include="..\DelegateMTreeProcessor.cpp" />
+    <ClCompile Include="..\MAccountBalance.cpp" />
     <ClCompile Include="..\MAccountDetails.cpp" />
+    <ClCompile Include="..\MAccountPurchase.cpp" />
+    <ClCompile Include="..\MAccountSession.cpp" />
+    <ClCompile Include="..\MAccountTransaction.cpp" />
+    <ClCompile Include="..\MContactRequest.cpp" />
+    <ClCompile Include="..\MContactRequestList.cpp" />
     <ClCompile Include="..\MegaSDK.cpp" />
     <ClCompile Include="..\MError.cpp" />
+    <ClCompile Include="..\MInputStreamAdapter.cpp" />
     <ClCompile Include="..\MNode.cpp" />
     <ClCompile Include="..\MNodeList.cpp" />
     <ClCompile Include="..\MPricing.cpp" />

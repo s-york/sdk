@@ -41,6 +41,8 @@ namespace mega
 
 		void onUsersUpdate(MegaApi* api, MegaUserList *users);
 		void onNodesUpdate(MegaApi* api, MegaNodeList *nodes);
+		void onAccountUpdate(MegaApi* api);
+        void onContactRequestsUpdate(MegaApi* api, MegaContactRequestList* requests);
 		void onReloadNeeded(MegaApi* api);
 
 	private:

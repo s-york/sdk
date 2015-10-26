@@ -33,6 +33,7 @@
 #include "backofftimer.h"
 #include "http.h"
 #include "pubkeyaction.h"
+#include "pendingcontactrequest.h"
 
 namespace mega {
 
@@ -88,14 +89,35 @@ public:
     // user login: e-mail, pwkey
     void login(const char*, const byte*);
 
+    // user login: e-mail, pwkey, emailhash
+    void fastlogin(const char*, const byte*, uint64_t);
+
     // session login: binary session, bytecount
     void login(const byte*, int);
+
+    // get user data
+    void getuserdata();
+
+    // get the public key of an user
+    void getpubkey(const char* user);
 
     // check if logged in
     sessiontype_t loggedin();
 
     // dump current session
-    int dumpsession(byte*, int);
+    int dumpsession(byte*, size_t);
+
+    // create a copy of the current session
+    void copysession();
+
+    // get the data for a session transfer
+    // the caller takes the ownership of the returned value
+    // if the second parameter isn't NULL, it's used as session id instead of the current one
+    string *sessiontransferdata(const char*, string* = NULL);
+
+    // Kill session id
+    void killsession(handle session);
+    void killallsessions();
 
     // set folder link: node, key
     error folderaccess(const char*, const char*);
@@ -113,7 +135,7 @@ public:
     void getaccountdetails(AccountDetails*, bool, bool, bool, bool, bool, bool);
 
     // update node attributes
-    error setattr(Node*, const char** = NULL);
+    error setattr(Node*, const char** = NULL, const char* prevattr = NULL);
 
     // prefix and encrypt attribute json
     void makeattr(SymmCipher*, string*, const char*, int = -1) const;
@@ -128,10 +150,10 @@ public:
     error unlink(Node*);
 
     // move node to new parent folder
-    error rename(Node*, Node*, syncdel_t = SYNCDEL_NONE);
+    error rename(Node*, Node*, syncdel_t = SYNCDEL_NONE, handle = UNDEF);
 
     // start/stop/pause file transfer
-    bool startxfer(direction_t, File*);
+    bool startxfer(direction_t, File*, bool skipdupes = false);
     void stopxfer(File* f);
     void pausexfers(direction_t, bool, bool = false);
 
@@ -204,14 +226,18 @@ public:
     error invite(const char*, visibility_t = VISIBLE);
 
     // add/remove/update outgoing share
-    void setshare(Node*, const char*, accesslevel_t);
+    void setshare(Node*, const char*, accesslevel_t, const char* = NULL);
+
+    // Add/delete/remind outgoing pending contact request
+    void setpcr(const char*, opcactions_t, const char* = NULL, const char* = NULL);
+    void updatepcr(handle, ipcactions_t);
 
     // export node link or remove existing exported link for this node
-    error exportnode(Node*, int);
+    error exportnode(Node*, int, m_time_t);
 
     // add/delete sync
     error addsync(string*, const char*, string*, Node*, fsfp_t = 0, int = 0);
-    void delsync(Sync*);
+    void delsync(Sync*, bool = true);
 
     // close all open HTTP connections
     void disconnect();
@@ -219,11 +245,20 @@ public:
     // abort session and free all state information
     void logout();
 
+    // free all state information
+    void locallogout();
+
+    // SDK version
+    const char* version();
+
     // maximum outbound throughput (per target server)
     int putmbpscap;
 
     // User-Agent header for HTTP requests
     string useragent;
+
+    // Issuer of a detected fake SSL certificate
+    string sslfakeissuer;
 
     // shopping basket
     handle_vector purchase_basket;
@@ -240,17 +275,60 @@ public:
     // submit purchased products for payment
     void purchase_checkout(int);
 
+    // submit purchase receipt for verification
+    void submitpurchasereceipt(int, const char*);
+
+    // store credit card
+    error creditcardstore(const char *);
+
+    // get credit card subscriptions
+    void creditcardquerysubscriptions();
+
+    // cancel credit card subscriptions
+    void creditcardcancelsubscriptions(const char *reason = NULL);
+
+    // get payment methods
+    void getpaymentmethods();
+
+    // store user feedback
+    void userfeedbackstore(const char *);
+
+    // send event
+    void sendevent(int, const char *);
+
+    // clean rubbish bin
+    void cleanrubbishbin();
+
     // toggle global debug flag
     bool toggledebug();
+
+    bool debugstate();
 
     // report an event to the API logger
     void reportevent(const char*, const char* = NULL);
 
+    // use an alternative port for downloads (8080)
+    bool usealtdownport;
+
+    // select the download port automatically
+    bool autodownport;
+
+    // use an alternative port for uploads (8080)
+    bool usealtupport;
+
+    // select the upload port automatically
+    bool autoupport;
+
+    // disable public key pinning (for testing purposes)
+    static bool disablepkp;
+
+    // root URL for API requests
+    static string APIURL;
+
+    // root URL for load balancing requests
+    static const char* const BALANCERURL;
+
 private:
-    // API request queue double buffering:
-    // reqs[r] is open for adding commands
-    // reqs[r^1] is being processed on the API server
-    HttpReq* pendingcs;
     BackoffTimer btcs;
 
     // server-client command trigger connection
@@ -259,9 +337,7 @@ private:
 
     // badhost report
     HttpReq* badhostcs;
-
-    // root URL for API requestrs
-    static const char* const APIURL;
+    HttpReq* loadbalancingcs;
 
     // notify URL for new server-client commands
     string scnotifyurl;
@@ -281,11 +357,6 @@ private:
     // next local user record identifier to use
     int userid;
 
-    // pending file attribute writes
-    putfa_list newfa;
-
-    // current attribute being sent
-    putfa_list::iterator curfa;
     BackoffTimer btpfa;
 
     // next internal upload handle
@@ -311,13 +382,18 @@ private:
 
     // server-client command processing
     void sc_updatenode();
-    void sc_deltree();
+    Node* sc_deltree();
     void sc_newnodes();
     void sc_contacts();
     void sc_keys();
     void sc_fileattr();
     void sc_userattr();
     bool sc_shares();
+    bool sc_upgrade();
+    void sc_opc();
+    void sc_ipc();
+    void sc_upc();
+    void sc_ph();
 
     void init();
 
@@ -339,9 +415,6 @@ private:
     // converts UTF-8 to 32-bit word array
     static char* str_to_a32(const char*, int*);
 
-    // last successful interaction with the Internet
-    dstime noinetds;
-
     // was the app notified of a retrying CS request?
     bool csretrying;
 
@@ -360,6 +433,8 @@ private:
 
     // abort queued direct read(s)
     void abortreads(handle, bool, m_off_t, m_off_t);
+
+    static const char PAYMENT_PUBKEY[];
 
 public:
     // application callbacks
@@ -389,8 +464,19 @@ public:
     // have we just completed fetching new nodes?
     bool statecurrent;
 
+    // pending file attribute writes
+    putfa_list newfa;
+
+    // current attribute being sent
+    putfa_list::iterator curfa;
+
+    // API request queue double buffering:
+    // reqs[r] is open for adding commands
+    // reqs[r^1] is being processed on the API server
+    HttpReq* pendingcs;
+
     // record type indicator for sctable
-    enum { CACHEDSCSN, CACHEDNODE, CACHEDUSER, CACHEDLOCALNODE } sctablerectype;
+    enum { CACHEDSCSN, CACHEDNODE, CACHEDUSER, CACHEDLOCALNODE, CACHEDPCR } sctablerectype;
 
     // initialize/update state cache referenced sctable
     void initsc();
@@ -407,6 +493,9 @@ public:
     // no two interrelated client instances should ever have the same sessionid
     char sessionid[10];
 
+    // session key to protect local storage
+    string sessionkey;
+
     // application key
     char appkey[16];
 
@@ -419,6 +508,9 @@ public:
     // user maps: by handle and by case-normalized e-mail address
     uh_map uhindex;
     um_map umindex;
+
+    // mapping of pending contact handles to their structure
+    handlepcr_map pcrindex;
 
     // pending file attributes
     fa_map pendingfa;
@@ -440,6 +532,7 @@ public:
 
     // merge newly received share into nodes
     void mergenewshares(bool);
+    void mergenewshare(NewShare *s, bool notify);    // merge only the given share
 
     // transfer queues (PUT/GET)
     transfer_map transfers[2];
@@ -464,6 +557,7 @@ public:
 
     // initial state load in progress?
     bool fetchingnodes;
+    int fetchnodestag;
 
     // server-client request sequence number
     char scsn[12];
@@ -476,6 +570,9 @@ public:
 
     user_vector usernotify;
     void notifyuser(User*);
+
+    pcr_vector pcrnotify;
+    void notifypcr(PendingContactRequest*);
 
     node_vector nodenotify;
     void notifynode(Node*);
@@ -503,8 +600,14 @@ public:
     // activity flag
     bool syncactivity;
 
+    // syncops indicates that a sync-relevant tree update may be pending
+    bool syncops;
+
     // app scanstate flag
     bool syncscanstate;
+
+    // scan required flag
+    bool syncdownrequired;
 
     // block local fs updates processing while locked ops are in progress
     bool syncfsopsfailed;
@@ -549,7 +652,7 @@ public:
     void syncupdate();
 
     // create missing folders, copy/start uploading missing files
-    void syncup(LocalNode*, dstime*);
+    bool syncup(LocalNode*, dstime*);
 
     // sync putnodes() completion
     void putnodes_sync_result(error, NewNode*, int);
@@ -570,6 +673,9 @@ public:
     
     // commit all queueud deletions
     void execsyncdeletions();
+
+    // process localnode subtree
+    void proclocaltree(LocalNode*, LocalTreeProc*);
 #endif
 
     // recursively cancel transfers in a subtree
@@ -592,11 +698,8 @@ public:
 
     dstime transferretrydelay();
 
-    // active request buffer
-    int r;
-
     // client-server request double-buffering
-    Request reqs[2];
+    RequestDispatcher reqs;
 
     // upload handle -> node handle map (filled by upload completion)
     handlepair_set uhnh;
@@ -605,6 +708,9 @@ public:
     void setchunkfailed(string*);
     string badhosts;
     
+    // queue for load balancing requests
+    std::queue<CommandLoadBalancing*> loadbalancingreqs;
+
     // process object arrays by the API server
     int readnodes(JSON*, int, putsource_t = PUTNODES_APP, NewNode* = NULL, int = 0, int = 0);
 
@@ -612,6 +718,11 @@ public:
     void readokelement(JSON*);
     void readoutshares(JSON*);
     void readoutshareelement(JSON*);
+
+    void readipc(JSON*);
+    void readopc(JSON*);
+
+    void procph(JSON*);
 
     void readcr();
     void readsr();
@@ -636,7 +747,11 @@ public:
     void purgenodesusersabortsc();
 
     static const int USERHANDLE = 8;
+    static const int PCRHANDLE = 8;
     static const int NODEHANDLE = 6;
+
+    // max new nodes per request
+    static const int MAX_NEWNODES = 2000;
 
     // session ID length (binary)
     static const unsigned SIDLEN = 2 * SymmCipher::KEYLENGTH + USERHANDLE * 4 / 3 + 1;
@@ -669,6 +784,9 @@ public:
     User* finduser(const char*, int = 0);
     User* finduser(handle, int = 0);
     void mapuser(handle, const char*);
+    void mappcr(handle, PendingContactRequest*);
+
+    PendingContactRequest* findpcr(handle);
 
     // queue public key request for user
     void queuepubkeyreq(User*, PubKeyAction*);
@@ -690,10 +808,16 @@ public:
     // hash password
     error pw_key(const char*, byte*) const;
 
+    // load balancing request
+    void loadbalancing(const char *);
+
     // convert hex digit to number
     static int hexval(char);
 
     SymmCipher tmpcipher;
+
+    void exportDatabase(string filename);
+    bool compareDatabases(string filename1, string filename2);
 
     MegaClient(MegaApp*, Waiter*, HttpIO*, FileSystemAccess*, DbAccess*, GfxProc*, const char*, const char*);
     ~MegaClient();

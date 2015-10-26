@@ -32,6 +32,7 @@ File::File()
     transfer = NULL;
     hprivate = true;
     syncxfer = false;
+    h = UNDEF;
 }
 
 File::~File()
@@ -100,8 +101,10 @@ void File::completed(Transfer* t, LocalNode* l)
         if (targetuser.size())
         {
             // drop file into targetuser's inbox
+            int creqtag = t->client->reqtag;
             t->client->reqtag = t->tag;
             t->client->putnodes(targetuser.c_str(), newnode, 1);
+            t->client->reqtag = creqtag;
         }
         else
         {
@@ -118,7 +121,7 @@ void File::completed(Transfer* t, LocalNode* l)
                 t->client->syncadding++;
             }
 #endif
-            t->client->reqs[t->client->r].add(new CommandPutNodes(t->client,
+            t->client->reqs.add(new CommandPutNodes(t->client,
                                                                   th, NULL,
                                                                   newnode, 1,
                                                                   t->tag,
@@ -140,7 +143,7 @@ void File::terminated()
 // failuresup to 16 times
 bool File::failed(error e)
 {
-    return e != API_EKEY && e != API_EBLOCKED && transfer->failcount < 16;
+    return e != API_EKEY && e != API_EBLOCKED && e != API_EOVERQUOTA && transfer->failcount < 16;
 }
 
 void File::displayname(string* dname)
@@ -255,9 +258,23 @@ bool SyncFileGet::failed(error e)
     if (n->parent && n->parent->localnode)
     {
         n->parent->localnode->treestate(TREESTATE_PENDING);
+
+        if (e == API_EBLOCKED)
+        {
+            n->parent->client->movetosyncdebris(n, n->parent->localnode->sync->inshare);
+        }
     }
 
     return File::failed(e);
+}
+
+void SyncFileGet::progress()
+{
+    File::progress();
+    if (n->parent && n->parent->localnode && n->parent->localnode->ts != TREESTATE_SYNCING)
+    {
+        n->parent->localnode->treestate(TREESTATE_SYNCING);
+    }
 }
 
 // update localname (parent's localnode)

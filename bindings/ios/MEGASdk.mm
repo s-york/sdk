@@ -18,6 +18,7 @@
  * You should have received a copy of the license along with this
  * program.
  */
+
 #import "MEGASdk.h"
 #import "megaapi.h"
 #import "MEGANode+init.h"
@@ -28,11 +29,14 @@
 #import "MEGAUserList+init.h"
 #import "MEGAError+init.h"
 #import "MEGAShareList+init.h"
+#import "MEGAContactRequest+init.h"
+#import "MEGAContactRequestList+init.h"
 #import "DelegateMEGARequestListener.h"
 #import "DelegateMEGATransferListener.h"
 #import "DelegateMEGAGlobalListener.h"
 #import "DelegateMEGAListener.h"
 #import "DelegateMEGALoggerListener.h"
+#import "MEGAInputStream.h"
 
 #import <set>
 #import <pthread.h>
@@ -70,7 +74,7 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
     return ret;
 }
 
@@ -107,7 +111,17 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
+    return ret;
+}
+
+- (NSString *)userAgent {
+    const char *val = self.megaApi->getUserAgent();
+    if (!val) return nil;
+    
+    NSString *ret = [[NSString alloc] initWithUTF8String:val];
+    
+    delete [] val;
     return ret;
 }
 
@@ -228,7 +242,7 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
     return ret;
 }
 
@@ -240,7 +254,7 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
     return ret;
 }
 
@@ -249,8 +263,17 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     return MegaApi::base64ToHandle([base64Handle UTF8String]);
 }
+
++ (NSString *)base64HandleForHandle:(uint64_t)handle {
+    return [[NSString alloc] initWithUTF8String:MegaApi::handleToBase64(handle)];
+}
+
 - (void)retryPendingConnections {
     self.megaApi->retryPendingConnections();
+}
+
+- (void)reconnect {
+    self.megaApi->retryPendingConnections(true, true);
 }
 
 #pragma mark - Login Requests
@@ -269,7 +292,7 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
     return ret;
 }
 
@@ -387,6 +410,14 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->copyNode((node != nil) ? [node getCPtr] : NULL, (newParent != nil) ? [newParent getCPtr] : NULL);
 }
 
+- (void)copyNode:(MEGANode *)node newParent:(MEGANode *)newParent newName:(NSString *)newName delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->copyNode((node != nil) ? [node getCPtr] : NULL, (newParent != nil) ? [newParent getCPtr] : NULL, (newName != nil) ? [newName UTF8String] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)copyNode:(MEGANode *)node newParent:(MEGANode *)newParent newName:(NSString *)newName {
+    self.megaApi->copyNode((node != nil) ? [node getCPtr] : NULL, (newParent != nil) ? [newParent getCPtr] : NULL, (newName != nil) ? [newName UTF8String] : NULL);
+}
+
 - (void)renameNode:(MEGANode *)node newName:(NSString *)newName delegate:(id<MEGARequestDelegate>)delegate {
     self.megaApi->renameNode((node != nil) ? [node getCPtr] : NULL, (newName != nil) ? [newName UTF8String] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
 }
@@ -402,6 +433,14 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
 
 - (void)removeNode:(MEGANode *)node {
     self.megaApi->remove((node != nil) ? [node getCPtr] : NULL);
+}
+
+- (void)cleanRubbishBinWithDelegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->cleanRubbishBin([self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)cleanRubbishBin {
+    self.megaApi->cleanRubbishBin();
 }
 
 #pragma mark - Sharing Requests
@@ -520,6 +559,30 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->setAvatar((sourceFilePath != nil) ? [sourceFilePath UTF8String] : NULL);
 }
 
+- (void)getUserAttibuteForUser:(MEGAUser *)user type:(MEGAUserAttribute)type {
+    self.megaApi->getUserAttribute((user != nil) ? [user getCPtr] : NULL, type);
+}
+
+- (void)getUserAttibuteForUser:(MEGAUser *)user type:(MEGAUserAttribute)type delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getUserAttribute((user != nil) ? [user getCPtr] : NULL, type, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)getUserAttibuteType:(MEGAUserAttribute)type {
+    self.megaApi->getUserAttribute(type);
+}
+
+- (void)getUserAttibuteType:(MEGAUserAttribute)type delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getUserAttribute(type, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)setUserAttibuteType:(MEGAUserAttribute)type value:(NSString *)value {
+    self.megaApi->setUserAttribute(type, (value != nil) ? [value UTF8String] : NULL);
+}
+
+- (void)setUserAttibuteType:(MEGAUserAttribute)type value:(NSString *)value delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->setUserAttribute(type, (value != nil) ? [value UTF8String] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
 #pragma mark - Account management Requests
 
 - (void)getAccountDetailsWithDelegate:(id<MEGARequestDelegate>)delegate {
@@ -538,12 +601,20 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->getPricing();
 }
 
-- (void)getPaymentURLForProductHandle:(uint64_t)productHandle delegate:(id<MEGARequestDelegate>)delegate {
-    self.megaApi->getPaymentUrl(productHandle, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+- (void)getPaymentIdForProductHandle:(uint64_t)productHandle delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getPaymentId(productHandle, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
 }
 
-- (void)getPaymentURLForProductHandle:(uint64_t)productHandle {
-    self.megaApi->getPaymentUrl(productHandle);
+- (void)getPaymentIdForProductHandle:(uint64_t)productHandle {
+    self.megaApi->getPaymentId(productHandle);
+}
+
+- (void)submitPurchase:(MEGAPaymentMethod)gateway receipt:(NSString *)receipt delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->submitPurchaseReceipt(gateway, (receipt != nil) ? [receipt UTF8String] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)submitPurchase:(MEGAPaymentMethod)gateway receipt:(NSString *)receipt {
+    self.megaApi->submitPurchaseReceipt(gateway, (receipt != nil) ? [receipt UTF8String] : NULL);
 }
 
 - (void)changePassword:(NSString *)oldPassword newPassword:(NSString *)newPassword delegate:(id<MEGARequestDelegate>)delegate {
@@ -560,6 +631,22 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
 
 - (void)addContactWithEmail:(NSString *)email {
     self.megaApi->addContact((email != nil) ? [email UTF8String] : NULL);
+}
+
+- (void)inviteContactWithEmail:(NSString *)email message:(NSString *)message action:(MEGAInviteAction)action delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->inviteContact((email != nil) ? [email UTF8String] : NULL, (message != nil) ? [message UTF8String] : NULL, (int)action, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)inviteContactWithEmail:(NSString *)email message:(NSString *)message action:(MEGAInviteAction)action {
+    self.megaApi->inviteContact((email != nil) ? [email UTF8String] : NULL, (message != nil) ? [message UTF8String] : NULL, (int)action);
+}
+
+- (void)replyContactRequest:(MEGAContactRequest *)request action:(MEGAReplyAction)action delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->replyContactRequest((request != nil) ? [request getCPtr] : NULL, (int)action, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)replyContactRequest:(MEGAContactRequest *)request action:(MEGAReplyAction)action {
+    self.megaApi->replyContactRequest((request != nil) ? [request getCPtr] : NULL, (int)action);
 }
 
 - (void)removeContactUser:(MEGAUser *)user delegate:(id<MEGARequestDelegate>)delegate {
@@ -586,7 +673,37 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->reportDebugEvent((text != nil) ? [text UTF8String] : NULL);
 }
 
+- (void)getUserDataWithDelegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getUserData([self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)getUserData {
+    self.megaApi->getUserData();
+}
+
+- (void)getUserDataWithMEGAUser:(MEGAUser *)user delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getUserData((user != nil) ? [user getCPtr] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)getUserDataWithMEGAUser:(MEGAUser *)user {
+    self.megaApi->getUserData((user != nil) ? [user getCPtr] : NULL);
+}
+
+- (void)getUserDataWithUser:(NSString *)user delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getUserData((user != nil) ? [user UTF8String] : NULL, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)getUserDataWithUser:(NSString *)user {
+    self.megaApi->getUserData((user != nil) ? [user UTF8String] : NULL);
+}
+
 #pragma mark - Transfer
+
+- (MEGATransfer *)transferByTag:(NSInteger)transferTag {
+    MegaTransfer *transfer = self.megaApi->getTransferByTag((int)transferTag);
+    
+    return transfer ? [[MEGATransfer alloc] initWithMegaTransfer:transfer cMemoryOwn:YES] : nil;
+}
 
 - (void)startUploadWithLocalPath:(NSString *)localPath parent:(MEGANode *)parent delegate:(id<MEGATransferDelegate>)delegate {
     self.megaApi->startUpload((localPath != nil) ? [localPath UTF8String] : NULL, (parent != nil) ? [parent getCPtr] : NULL, [self createDelegateMEGATransferListener:delegate singleListener:YES]);
@@ -612,11 +729,11 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->startDownload((node != nil) ? [node getCPtr] : NULL, (localPath != nil) ? [localPath UTF8String] : NULL);
 }
 
-- (void)startStreammingNode:(MEGANode *)node startPos:(NSNumber *)startPos size:(NSNumber *)size delegate:(id<MEGATransferDelegate>)delegate {
+- (void)startStreamingNode:(MEGANode *)node startPos:(NSNumber *)startPos size:(NSNumber *)size delegate:(id<MEGATransferDelegate>)delegate {
     self.megaApi->startStreaming((node != nil) ? [node getCPtr] : NULL, (startPos != nil) ? [startPos longLongValue] : 0, (size != nil) ? [size longLongValue] : 0, [self createDelegateMEGATransferListener:delegate singleListener:YES]);
 }
 
-- (void)startStreammingNode:(MEGANode *)node startPos:(NSNumber *)startPos size:(NSNumber *)size {
+- (void)startStreamingNode:(MEGANode *)node startPos:(NSNumber *)startPos size:(NSNumber *)size {
     self.megaApi->startStreaming((node != nil) ? [node getCPtr] : NULL, (startPos != nil) ? [startPos longLongValue] : 0, (size != nil) ? [size longLongValue] : 0, NULL);
 }
 
@@ -636,12 +753,32 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     self.megaApi->cancelTransfers((int)direction);
 }
 
+- (void)cancelTransferByTag:(NSInteger)transferTag delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->cancelTransferByTag((int)transferTag, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)cancelTransferByTag:(NSInteger)transferTag {
+    self.megaApi->cancelTransferByTag((int)transferTag);
+}
+
 - (void)pauseTransfers:(BOOL)pause delegate:(id<MEGARequestDelegate>)delegate {
     self.megaApi->pauseTransfers(pause, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
 }
 
 - (void)pauseTransfers:(BOOL)pause {
     self.megaApi->pauseTransfers(pause);
+}
+
+- (void)pauseTransfers:(BOOL)pause forDirection:(NSInteger)direction delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->pauseTransfers(pause, (int)direction, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)pauseTransfers:(BOOL)pause forDirection:(NSInteger)direction {
+    self.megaApi->pauseTransfers(pause, (int)direction);
+}
+
+- (BOOL)areTransferPausedForDirection:(NSInteger)direction {
+    return self.megaApi->areTransfersPaused((int)direction);
 }
 
 - (void)setUploadLimitWithBpsLimit:(NSInteger)bpsLimit {
@@ -694,7 +831,7 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
     return ret;
 }
 
@@ -747,8 +884,20 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     return self.megaApi->isShared([node getCPtr]);
 }
 
+- (MEGAShareList *)outShares {
+    return [[MEGAShareList alloc] initWithShareList:self.megaApi->getOutShares() cMemoryOwn:YES];
+}
+
 - (MEGAShareList *)outSharesForNode:(MEGANode *)node {
     return [[MEGAShareList alloc] initWithShareList:self.megaApi->getOutShares((node != nil) ? [node getCPtr] : NULL) cMemoryOwn:YES];
+}
+
+- (MEGAContactRequestList *)incomingContactRequests {
+    return [[MEGAContactRequestList alloc] initWithMegaContactRequestList:self.megaApi->getIncomingContactRequests() cMemoryOwn:YES];
+}
+
+- (MEGAContactRequestList *)outgoingContactRequests {
+    return [[MEGAContactRequestList alloc] initWithMegaContactRequestList:self.megaApi->getOutgoingContactRequests() cMemoryOwn:YES];
 }
 
 - (NSString *)fingerprintForFilePath:(NSString *)filePath {
@@ -759,14 +908,32 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     
     NSString *ret = [[NSString alloc] initWithUTF8String:val];
     
-    delete val;
+    delete [] val;
+    return ret;
+}
+
+- (NSString *)fingerprintForAssetRepresentation:(ALAssetRepresentation *)assetRepresentation modificationTime:(NSDate *)modificationTime {
+    if (assetRepresentation == nil) return nil;
+    
+    MEGAInputStream mis = MEGAInputStream(assetRepresentation);
+    const char *val = self.megaApi->getFingerprint(&mis, (long long)[modificationTime timeIntervalSince1970]);
+    
+    NSString *ret = [[NSString alloc] initWithUTF8String:val];
+    
+    delete [] val;
     return ret;
 }
 
 - (NSString *)fingerprintForNode:(MEGANode *)node {
     if (node == nil) return nil;
     
-    return self.megaApi->getFingerprint([node getCPtr]) ? [[NSString alloc] initWithUTF8String:self.megaApi->getFingerprint([node getCPtr])] : nil;
+    const char *val = self.megaApi->getFingerprint([node getCPtr]);
+    if (!val) return nil;
+
+    NSString *ret = [[NSString alloc] initWithUTF8String:val];
+
+    delete [] val;
+    return ret;
 }
 
 - (MEGANode *)nodeForFingerprint:(NSString *)fingerprint {
@@ -777,19 +944,67 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
     return node ? [[MEGANode alloc] initWithMegaNode:node cMemoryOwn:YES] : nil;
 }
 
+- (MEGANode *)nodeForFingerprint:(NSString *)fingerprint parent:(MEGANode *)parent {
+    if (fingerprint == nil) return nil;
+    
+    MegaNode *node = self.megaApi->getNodeByFingerprint([fingerprint UTF8String], (parent != nil) ? [parent getCPtr] : NULL);
+    
+    return node ? [[MEGANode alloc] initWithMegaNode:node cMemoryOwn:YES] : nil;
+}
+
 - (BOOL)hasFingerprint:(NSString *)fingerprint{
     if (fingerprint == nil) return NO;
     
     return self.megaApi->hasFingerprint([fingerprint UTF8String]);
 }
 
-- (NSInteger)accessLevelForNode:(MEGANode *)node {
-    if (node == nil) return -1;
+- (NSString *)CRCForFilePath:(NSString *)filePath {
+    if (filePath == nil) return nil;
     
-    return self.megaApi->getAccess([node getCPtr]);
+    const char *val = self.megaApi->getCRC([filePath UTF8String]);
+    if (!val) return nil;
+    
+    NSString *ret = [[NSString alloc] initWithUTF8String:val];
+    
+    delete [] val;
+    return ret;
 }
 
-- (MEGAError *)checkAccessForNode:(MEGANode *)node level:(NSInteger)level {
+- (NSString *)CRCForFingerprint:(NSString *)fingerprint{
+    if (fingerprint == nil) {
+        return nil;
+    }
+    
+    const char *val = self.megaApi->getCRCFromFingerprint([fingerprint UTF8String]);
+    if (!val) return nil;
+    
+    NSString *ret = [[NSString alloc] initWithUTF8String:val];
+    
+    delete [] val;
+    return ret;
+}
+
+- (NSString *)CRCForNode:(MEGANode *)node {
+    if (node == nil) return nil;
+    
+    return self.megaApi->getCRC([node getCPtr]) ? [[NSString alloc] initWithUTF8String:self.megaApi->getCRC([node getCPtr])] : nil;
+}
+
+- (MEGANode *)nodeByCRC:(NSString *)crc parent:(MEGANode *)parent {
+    if (crc == nil) return nil;
+    
+    MegaNode *node = self.megaApi->getNodeByCRC([crc UTF8String], (parent != nil) ? [parent getCPtr] : NULL);
+    
+    return node ? [[MEGANode alloc] initWithMegaNode:node cMemoryOwn:YES] : nil;
+}
+
+- (MEGAShareType)accessLevelForNode:(MEGANode *)node {
+    if (node == nil) return MEGAShareTypeAccessUnkown;
+    
+    return (MEGAShareType) self.megaApi->getAccess([node getCPtr]);
+}
+
+- (MEGAError *)checkAccessForNode:(MEGANode *)node level:(MEGAShareType)level {
     if (node == nil) return nil;
     
     return [[MEGAError alloc] initWithMegaError:self.megaApi->checkAccess((node != nil) ? [node getCPtr] : NULL, (int) level).copy() cMemoryOwn:YES];
@@ -809,6 +1024,30 @@ static DelegateMEGALogerListener *externalLogger = new DelegateMEGALogerListener
 
 - (NSNumber *)sizeForNode:(MEGANode *)node {
     return [[NSNumber alloc] initWithLongLong:self.megaApi->getSize([node getCPtr])];
+}
+
+- (NSString *)escapeFsIncompatible:(NSString *)name {
+    return (name != nil) ? [[NSString alloc] initWithUTF8String:self.megaApi->escapeFsIncompatible([name UTF8String])] : nil;
+}
+
+- (NSString *)unescapeFsIncompatible:(NSString *)localName {
+    return (localName != nil) ? [[NSString alloc] initWithUTF8String:self.megaApi->unescapeFsIncompatible([localName UTF8String])] : nil;
+}
+
+- (void)changeApiUrl:(NSString *)apiURL disablepkp:(BOOL)disablepkp {
+    self.megaApi->changeApiUrl((apiURL != nil) ? [apiURL UTF8String] : NULL, disablepkp);
+}
+
+- (BOOL)createThumbnail:(NSString *)imagePath destinatioPath:(NSString *)destinationPath {
+    if (imagePath == nil || destinationPath == nil) return NO;
+    
+    return self.megaApi->createThumbnail([imagePath UTF8String], [destinationPath UTF8String]);
+}
+
+- (BOOL)createPreview:(NSString *)imagePath destinatioPath:(NSString *)destinationPath {
+    if (imagePath == nil || destinationPath == nil) return NO;
+    
+    return self.megaApi->createPreview([imagePath UTF8String], [destinationPath UTF8String]);
 }
 
 #pragma mark - Debug log messages

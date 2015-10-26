@@ -59,7 +59,22 @@ typedef NS_ENUM (NSInteger, MEGARequestType) {
     MEGARequestTypeReportEvent,
     MEGARequestTypeCancelAttrFile,
     MEGARequestTypeGetPricing,
-    MEGARequestTypeGetPaymentURL
+    MEGARequestTypeGetPaymentId,
+    MEGARequestTypeGetUserData,
+    MEGARequestTypeLoadBalancing,
+    MEGARequestTypeKillSession,
+    MEGARequestTypeSubmitPurchaseReceipt,
+    MEGARequestTypeCreditCardStore,
+    MEGARequestTypeUpgradeAccount,
+    MEGARequestTypeCreditCardQuerySubscriptions,
+    MEGARequestTypeCreditCardCancelSubscriptions,
+    MEGARequestTypeGetSessionTransferUrl,
+    MEGARequestTypeGetPaymentMethods,
+    MEGARequestTypeInviteContact,
+    MEGARequestTypeReplyContactRequest,
+    MEGARequestTypeSubmitFeedback,
+    MEGARequestTypeSendEvent,
+    MEGARequestTypeCleanRubbishBin
 };
 
 typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
@@ -120,7 +135,7 @@ typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
  * - [MEGASdk setPreviewNode:sourceFilePath:] - Returns the handle of the node
  * - [MEGASdk exportNode:] - Returns the handle of the node
  * - [MEGASdk disableExportNode:] - Returns the handle of the node
- * - [MEGASdk getPaymentURLForProductHandle:] - Returns the handle of the folder in MEGA
+ * - [MEGASdk getPaymentIdForProductHandle:] - Returns the handle of the folder in MEGA
  *
  * This value is valid for these requests in onRequestFinish when the
  * error code is MEGAErrorTypeApiOk:
@@ -145,7 +160,7 @@ typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
  * This value is valid for these requests in onRequestFinish when the
  * error code is MEGAErrorTypeApiOk:
  * - [MEGASdk exportNode:] - Returns the public link
- * - [MEGASdk getPaymentURLForProductHandle:] - Returns the payment link
+ * - [MEGASdk getPaymentIdForProductHandle:] - Returns the payment link
  *
  */
 @property (readonly, nonatomic) NSString *link;
@@ -202,6 +217,7 @@ typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
  * - [MEGASdk getAvatarUser:destinationFilePath:] - Returns the email of the user to get the avatar
  * - [MEGASdk addContactWithEmail:] - Returns the email of the contact
  * - [MEGASdk removeContactWithEmail:] - Returns the email of the contact
+ * - [MEGASdk getUserData] - Returns the name of the user
  *
  * This value is valid for these request in onRequestFinish when the
  * error code is MEGAErrorTypeApiOk:
@@ -323,7 +339,7 @@ typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
  *
  * This value is valid for these requests:
  * - [MEGASdk retryPendingConnections] - Returns if request are disconnected
- * - [MEGASdk pauseTransfers:] - Returns YES if transfers were paused, NO if they were resumed
+ * - [MEGASdk pauseTransfers:] - Returns the direction of the transfers to pause/resume
  *
  */
 @property (readonly, nonatomic) BOOL flag;
@@ -346,7 +362,7 @@ typedef NS_ENUM (NSInteger, MEGANodeAccessLevel) {
  * - [MEGASdk getAccountDetails] - Details of the MEGA account
  *
  */
-@property (readonly, nonatomic) MEGAAcountDetails *megaAcountDetails;
+@property (readonly, nonatomic) MEGAAccountDetails *megaAccountDetails;
 
 /**
  * @brief Available pricing plans to upgrade a MEGA account.

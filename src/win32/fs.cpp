@@ -92,12 +92,14 @@ bool WinFileAccess::sysstat(m_time_t* mtime, m_off_t* size)
 
     if (!GetFileAttributesExW((LPCWSTR)localname.data(), GetFileExInfoStandard, (LPVOID)&fad))
     {
-        retry = WinFileSystemAccess::istransient(GetLastError());
+        DWORD e = GetLastError();
+        retry = WinFileSystemAccess::istransient(e);
         return false;
     }
 
     if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
+        retry = false;
         return false;
     }
 
@@ -121,7 +123,9 @@ bool WinFileAccess::sysopen()
 
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        retry = WinFileSystemAccess::istransient(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to open file (sysopen). Error code: " << e;
+        retry = WinFileSystemAccess::istransient(e);
         return false;
     }
 
@@ -287,6 +291,11 @@ bool WinFileAccess::fopen(string* name, bool read, bool write)
     if (read)
     {
         size = ((m_off_t)fad.nFileSizeHigh << 32) + (m_off_t)fad.nFileSizeLow;
+        if(!size)
+        {
+            LOG_debug << "Zero-byte file. mtime: " << mtime << "  ctime: " << FileTime_to_POSIX(&fad.ftCreationTime)
+                      << "  attrs: " << fad.dwFileAttributes << "  access: " << FileTime_to_POSIX(&fad.ftLastAccessTime);
+        }
     }
 
     return true;
@@ -434,7 +443,9 @@ bool WinFileSystemAccess::renamelocal(string* oldname, string* newname, bool rep
 
     if (!r)
     {
-        transient_error = istransientorexists(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to move file. Error code: " << e;
+        transient_error = istransientorexists(e);
     }
 
     return r;
@@ -456,7 +467,9 @@ bool WinFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t)
 
     if (!r)
     {
-        transient_error = istransientorexists(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to copy file. Error code: " << e;
+        transient_error = istransientorexists(e);
     }
 
     return r;
@@ -470,7 +483,9 @@ bool WinFileSystemAccess::rmdirlocal(string* name)
 
     if (!r)
     {
-        transient_error = istransient(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to delete folder. Error code: " << e;
+        transient_error = istransient(e);
     }
 
     return r;
@@ -484,10 +499,127 @@ bool WinFileSystemAccess::unlinklocal(string* name)
 
     if (!r)
     {
-        transient_error = istransient(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to delete file. Error code: " << e;
+        transient_error = istransient(e);
     }
 
     return r;
+}
+
+// delete all files and folders contained in the specified folder
+// (does not recurse into mounted devices)
+void WinFileSystemAccess::emptydirlocal(string* name, dev_t basedev)
+{
+    HANDLE hDirectory, hFind;
+    dev_t currentdev;
+
+    int added = WinFileSystemAccess::sanitizedriveletter(name);
+    name->append("", 1);
+
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+    if (!GetFileAttributesExW((LPCWSTR)name->data(), GetFileExInfoStandard, (LPVOID)&fad)
+        || !(fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        || fad.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+    {
+        // discard files and resparse points (links, etc.)
+        name->resize(name->size() - added - 1);
+        return;
+    }
+
+#ifdef WINDOWS_PHONE
+    CREATEFILE2_EXTENDED_PARAMETERS ex = { 0 };
+    ex.dwSize = sizeof(ex);
+    ex.dwFileFlags = FILE_FLAG_BACKUP_SEMANTICS;
+    hDirectory = CreateFile2((LPCWSTR)name->data(), GENERIC_READ, FILE_SHARE_WRITE | FILE_SHARE_READ,
+                        OPEN_EXISTING, &ex);
+#else
+    hDirectory = CreateFileW((LPCWSTR)name->data(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+#endif
+    name->resize(name->size() - added - 1);
+    if (hDirectory == INVALID_HANDLE_VALUE)
+    {
+        // discard not accessible folders
+        return;
+    }
+
+#ifdef WINDOWS_PHONE
+    FILE_ID_INFO fi = { 0 };
+    if(!GetFileInformationByHandleEx(hDirectory, FileIdInfo, &fi, sizeof(fi)))
+#else
+    BY_HANDLE_FILE_INFORMATION fi;
+    if (!GetFileInformationByHandle(hDirectory, &fi))
+#endif
+    {
+        currentdev = 0;
+    }
+    else
+    {
+    #ifdef WINDOWS_PHONE
+        currentdev = fi.VolumeSerialNumber + 1;
+    #else
+        currentdev = fi.dwVolumeSerialNumber + 1;
+    #endif
+    }
+    CloseHandle(hDirectory);
+    if (basedev && currentdev != basedev)
+    {
+        // discard folders on different devices
+        return;
+    }
+
+    bool removed;
+    for (;;)
+    {
+        // iterate over children and delete
+        removed = false;
+        name->append((char*)L"\\*", 5);
+        WIN32_FIND_DATAW ffd;
+    #ifdef WINDOWS_PHONE
+        hFind = FindFirstFileExW((LPCWSTR)name->data(), FindExInfoBasic, &ffd, FindExSearchNameMatch, NULL, 0);
+    #else
+        hFind = FindFirstFileW((LPCWSTR)name->data(), &ffd);
+    #endif
+        name->resize(name->size() - 5);
+        if (hFind == INVALID_HANDLE_VALUE)
+        {
+            break;
+        }
+
+        bool morefiles = true;
+        while (morefiles)
+        {
+            if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+                && (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                    || *ffd.cFileName != '.'
+                    || (ffd.cFileName[1] && ((ffd.cFileName[1] != '.')
+                    || ffd.cFileName[2]))))
+            {
+                string childname = *name;
+                childname.append((char*)L"\\", 2);
+                childname.append((char*)ffd.cFileName, sizeof(wchar_t) * wcslen(ffd.cFileName));
+                if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                {
+                    emptydirlocal(&childname , currentdev);
+                    childname.append("", 1);
+                    removed |= !!RemoveDirectoryW((LPCWSTR)childname.data());
+                }
+                else
+                {
+                    childname.append("", 1);
+                    removed |= !!DeleteFileW((LPCWSTR)childname.data());
+                }
+            }
+            morefiles = FindNextFileW(hFind, &ffd);
+        }
+
+        FindClose(hFind);
+        if (!removed)
+        {
+            break;
+        }
+    }
 }
 
 bool WinFileSystemAccess::mkdirlocal(string* name, bool hidden)
@@ -497,7 +629,9 @@ bool WinFileSystemAccess::mkdirlocal(string* name, bool hidden)
 
     if (!r)
     {
-        transient_error = istransientorexists(GetLastError());
+        DWORD e = GetLastError();
+        LOG_debug << "Unable to create folder. Error code: " << e;
+        transient_error = istransientorexists(e);
     }
     else if (hidden)
     {
@@ -524,7 +658,7 @@ bool WinFileSystemAccess::mkdirlocal(string* name, bool hidden)
     return r;
 }
 
-bool WinFileSystemAccess::setmtimelocal(string* name, m_time_t mtime) const
+bool WinFileSystemAccess::setmtimelocal(string* name, m_time_t mtime)
 {
 #ifdef WINDOWS_PHONE
     return false;
@@ -539,6 +673,9 @@ bool WinFileSystemAccess::setmtimelocal(string* name, m_time_t mtime) const
 
     if (hFile == INVALID_HANDLE_VALUE)
     {
+        DWORD e = GetLastError();
+        transient_error = istransient(e);
+        LOG_warn << "Error opening file to change mtime: " << e;
         return false;
     }
 
@@ -548,6 +685,12 @@ bool WinFileSystemAccess::setmtimelocal(string* name, m_time_t mtime) const
     lwt.dwHighDateTime = ll >> 32;
 
     int r = !!SetFileTime(hFile, NULL, NULL, &lwt);
+    if (!r)
+    {
+        DWORD e = GetLastError();
+        transient_error = istransient(e);
+        LOG_warn << "Error changing mtime: " << e;
+    }
 
     CloseHandle(hFile);
 
@@ -625,7 +768,7 @@ void WinFileSystemAccess::osversion(string* u) const
     char buf[128];
 
 #ifdef WINDOWS_PHONE
-    sprintf(buf, "Windows Phone 8/8.1");
+    sprintf(buf, "Windows Phone");
 #else
     DWORD dwVersion = GetVersion();
 
@@ -743,7 +886,9 @@ void WinDirNotify::readchanges()
     }
     else
     {
-        if (GetLastError() == ERROR_NOTIFY_ENUM_DIR)
+        DWORD e = GetLastError();
+        LOG_warn << "ReadDirectoryChanges not available. Error code: " << e;
+        if (e == ERROR_NOTIFY_ENUM_DIR)
         {
             // notification buffer overflow
             error = true;
@@ -817,6 +962,35 @@ DirAccess* WinFileSystemAccess::newdiraccess()
 DirNotify* WinFileSystemAccess::newdirnotify(string* localpath, string* ignore)
 {
     return new WinDirNotify(localpath, ignore);
+}
+
+bool WinFileSystemAccess::issyncsupported(string *localpath)
+{
+    WCHAR VBoxSharedFolderFS[] = L"VBoxSharedFolderFS";
+    string path, fsname;
+    bool result = true;
+
+#ifndef WINDOWS_PHONE
+    localpath->append("", 1);
+    path.resize(MAX_PATH * sizeof(WCHAR));
+    fsname.resize(MAX_PATH * sizeof(WCHAR));
+
+    if (GetVolumePathNameW((LPCWSTR)localpath->data(), (LPWSTR)path.data(), MAX_PATH)
+        && GetVolumeInformationW((LPCWSTR)path.data(), NULL, 0, NULL, NULL, NULL, (LPWSTR)fsname.data(), MAX_PATH)
+        && !memcmp(fsname.data(), VBoxSharedFolderFS, sizeof(VBoxSharedFolderFS)))
+    {
+        LOG_warn << "VBoxSharedFolderFS is not supported because it doesn't provide ReadDirectoryChanges() nor unique file identifiers";
+        result = false;
+    }
+
+    string utf8fsname;
+    local2path(&fsname, &utf8fsname);
+    LOG_debug << "Filesystem type: " << utf8fsname;
+
+    localpath->resize(localpath->size() - 1);
+#endif
+
+    return result;
 }
 
 bool WinDirAccess::dopen(string* name, FileAccess* f, bool glob)

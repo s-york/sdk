@@ -159,4 +159,142 @@ int Base64::btoa(const byte* b, int blen, char* a)
 
     return p;
 }
+
+byte Base32::to32(byte c)
+{
+    c &= 31;
+
+    if (c < 26)
+    {
+        return c + 'a';
+    }
+
+    return c - 26 + '2';
+}
+
+byte Base32::from32(byte c)
+{
+    if ((c >= 'a') && (c <= 'z'))
+    {
+        return c - 'a';
+    }
+
+    if ((c >= '2') && (c <= '9'))
+    {
+        return c - '2' + 26;
+    }
+
+    return 255;
+}
+
+int Base32::btoa(const byte *b, int blen, char *a)
+{
+    int p = 0;
+
+    for (;;)
+    {
+        if (blen <= 0)
+        {
+            break;
+        }
+
+        a[p++] = to32( *b >> 3);
+        a[p++] = to32((*b << 2) | (((blen > 1) ? b[1] : 0) >> 6));
+
+        if (blen < 2)
+        {
+            break;
+        }
+
+        a[p++] = to32(b[1] >> 1);
+        a[p++] = to32(b[1] << 4 | (((blen > 2) ? b[2] : 0) >> 4));
+
+        if (blen < 3)
+        {
+            break;
+        }
+
+        a[p++] = to32((b[2] << 1) | (((blen > 3) ? b[3] : 0) >> 7));
+
+        if (blen < 4)
+        {
+            break;
+        }
+
+        a[p++] = to32(b[3] >> 2);
+        a[p++] = to32(b[3] << 3 | (((blen > 4) ? b[4] : 0) >> 5));
+
+        if (blen < 5)
+        {
+            break;
+        }
+
+        a[p++] = to32(b[4]);
+
+        blen -= 5;
+        b += 5;
+    }
+
+    a[p] = 0;
+
+    return p;
+}
+
+int Base32::atob(const char *a, byte *b, int blen)
+{
+    byte c[8];
+    int i;
+    int p = 0;
+
+    c[7] = 0;
+
+    for (;;)
+    {
+        for (i = 0; i < 8; i++)
+        {
+            if ((c[i] = from32(*a++)) == 255)
+            {
+                break;
+            }
+        }
+
+        if ((p >= blen) || !i)
+        {
+            return p;
+        }
+
+        b[p++] = (c[0] << 3) | ((c[1] & 0x1C) >> 2);
+
+        if ((p >= blen) || (i < 4))
+        {
+            return p;
+        }
+
+        b[p++] = (c[1] << 6) | (c[2] << 1) | ((c[3] & 0x10) >> 4);
+
+        if ((p >= blen) || (i < 5))
+        {
+            return p;
+        }
+
+        b[p++] = (c[3] << 4) | ((c[4] & 0x1E) >> 1);
+
+        if ((p >= blen) || (i < 7))
+        {
+            return p;
+        }
+
+        b[p++] = (c[4] << 7) | (c[5] << 2) | ((c[6] & 0x18) >> 3);
+
+        if ((p >= blen) || (i < 8))
+        {
+            return p;
+        }
+
+        b[p++] = (c[6] << 5) | c[7];
+    }
+
+    return p;
+}
+
 } // namespace

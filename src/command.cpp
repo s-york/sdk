@@ -28,6 +28,9 @@ Command::Command()
     persistent = false;
     level = -1;
     canceled = false;
+    result = API_OK;
+    client = NULL;
+    tag = 0;
 }
 
 void Command::cancel()
@@ -168,7 +171,7 @@ void Command::element(int n)
 // add handle (with size specifier)
 void Command::element(handle h, int len)
 {
-    char buf[12];
+    char buf[16];
 
     Base64::btoa((const byte*)&h, len, buf);
 

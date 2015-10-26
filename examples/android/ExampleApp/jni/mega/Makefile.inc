@@ -38,6 +38,7 @@ CPP_SOURCES= sdk/src/attrmap.cpp \
     sdk/src/transfer.cpp \
     sdk/src/transferslot.cpp \
     sdk/src/proxy.cpp \
+    sdk/src/pendingcontactrequest.cpp \
     sdk/src/treeproc.cpp \
     sdk/src/user.cpp \
     sdk/src/utils.cpp \
@@ -48,7 +49,7 @@ CPP_SOURCES= sdk/src/attrmap.cpp \
     sdk/src/posix/net.cpp  \
     sdk/src/posix/fs.cpp  \
     sdk/src/posix/waiter.cpp \
-    sdk/third_party/utf8proc/utf8proc.cpp \
+    sdk/src/mega_utf8proc.cpp \
     sdk/src/posix/waiter.cpp \
     sdk/src/posix/net.cpp \
     sdk/src/gfx.cpp \
@@ -84,6 +85,7 @@ HEADERS= sdk/include/mega.h \
 	    sdk/include/mega/transfer.h \
 	    sdk/include/mega/transferslot.h \
 	    sdk/include/mega/proxy.h \
+	    sdk/include/mega/pendingcontactrequest.h \
 	    sdk/include/mega/treeproc.h \
 	    sdk/include/mega/types.h \
 	    sdk/include/mega/user.h \

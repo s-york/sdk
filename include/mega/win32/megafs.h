@@ -49,6 +49,8 @@ public:
     DirAccess* newdiraccess();
     DirNotify* newdirnotify(string*, string*);
 
+    bool issyncsupported(string*);
+
     void tmpnamelocal(string*) const;
 
     void path2local(string*, string*) const;
@@ -63,7 +65,7 @@ public:
     bool unlinklocal(string*);
     bool rmdirlocal(string*);
     bool mkdirlocal(string*, bool);
-    bool setmtimelocal(string *, m_time_t) const;
+    bool setmtimelocal(string *, m_time_t);
     bool chdirlocal(string*) const;
     size_t lastpartlocal(string*) const;
     bool getextension(string*, char*, int) const;
@@ -74,6 +76,8 @@ public:
     bool istransientorexists(DWORD);
 
     void osversion(string*) const;
+
+    static void emptydirlocal(string*, dev_t = 0);
 
     WinFileSystemAccess();
 };

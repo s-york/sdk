@@ -69,7 +69,27 @@ struct MEGA_API NewNode : public NodeCore
     {
         syncid = UNDEF;
         added = false;
+        source = NEW_NODE;
+        uploadhandle = UNDEF;
+        localnode = NULL;
     }
+};
+
+struct MEGA_API PublicLink
+{
+    handle ph;
+    m_time_t ets;
+    bool takendown;
+
+    PublicLink(handle ph, m_time_t ets, bool takendown)
+    {
+        this->ph = ph;
+        this->ets = ets;
+        this->takendown = takendown;
+    }
+
+    PublicLink(PublicLink *plink);
+    bool isExpired();
 };
 
 // filesystem node
@@ -119,6 +139,9 @@ struct MEGA_API Node : public NodeCore, Cachable, FileFingerprint
     // outbound shares by user
     share_map *outshares;
 
+    // outbound pending shares
+    share_map *pendingshares;
+
     // incoming/outgoing share key
     SymmCipher* sharekey;
 
@@ -136,6 +159,7 @@ struct MEGA_API Node : public NodeCore, Cachable, FileFingerprint
         bool fileattrstring : 1;
         bool inshare : 1;
         bool outshares : 1;
+        bool pendingshares : 1;
         bool parent : 1;
     } changed;
     
@@ -180,6 +204,9 @@ struct MEGA_API Node : public NodeCore, Cachable, FileFingerprint
 
     // check if node is below this node
     bool isbelow(Node*) const;
+
+    // handle of public link for the node
+    PublicLink *plink;
 
     bool serialize(string*);
     static Node* unserialize(MegaClient*, string*, node_vector*);
@@ -238,6 +265,9 @@ struct MEGA_API LocalNode : public File, Cachable
 
         // an issue has been reported
         bool reported : 1;
+
+        // checked for missing attributes
+        bool checked : 1;
     };
 
     // current subtree sync state: current and displayed
@@ -245,6 +275,9 @@ struct MEGA_API LocalNode : public File, Cachable
 
     // update sync state all the way to the root node
     void treestate(treestate_t = TREESTATE_NONE);
+
+    // check the current state (only useful for folders)
+    treestate_t checkstate();
 
     // timer to delay upload start
     dstime nagleds;
@@ -260,8 +293,10 @@ struct MEGA_API LocalNode : public File, Cachable
     // return child node by name
     LocalNode* childbyname(string*);
 
+#ifdef USE_INOTIFY
     // node-specific DirNotify tag
     handle dirnotifytag;
+#endif
 
     void prepare();
     void completed(Transfer*, LocalNode*);

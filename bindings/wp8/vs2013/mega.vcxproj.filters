@@ -81,6 +81,9 @@
     <ClInclude Include="..\..\..\include\mega\node.h">
       <Filter>SDK\Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\include\mega\pendingcontactrequest.h">
+      <Filter>SDK\Header</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\..\include\mega\proxy.h">
       <Filter>SDK\Header</Filter>
     </ClInclude>
@@ -243,6 +246,30 @@
     <ClInclude Include="..\MPricing.h">
       <Filter>Bindings</Filter>
     </ClInclude>
+    <ClInclude Include="..\MContactRequest.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MContactRequestList.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MInputStream.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MInputStreamAdapter.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MAccountBalance.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MAccountSession.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MAccountPurchase.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
+    <ClInclude Include="..\MAccountTransaction.h">
+      <Filter>Bindings</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\src\attrmap.cpp">
@@ -299,6 +326,9 @@
     <ClCompile Include="..\..\..\src\node.cpp">
       <Filter>SDK\Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\pendingcontactrequest.cpp">
+      <Filter>SDK\Source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\..\src\proxy.cpp">
       <Filter>SDK\Source</Filter>
     </ClCompile>
@@ -351,9 +381,6 @@
       <Filter>SDK\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\crypto\cryptopp.cpp">
-      <Filter>SDK\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\third_party\utf8proc\utf8proc.cpp">
       <Filter>SDK\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\src\gfx\external.cpp">
@@ -423,6 +450,30 @@
       <Filter>Bindings</Filter>
     </ClCompile>
     <ClCompile Include="..\MPricing.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\mega_utf8proc.cpp">
+      <Filter>SDK\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MContactRequest.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MContactRequestList.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MInputStreamAdapter.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MAccountBalance.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MAccountSession.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MAccountPurchase.cpp">
+      <Filter>Bindings</Filter>
+    </ClCompile>
+    <ClCompile Include="..\MAccountTransaction.cpp">
       <Filter>Bindings</Filter>
     </ClCompile>
   </ItemGroup>

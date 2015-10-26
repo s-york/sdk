@@ -57,6 +57,7 @@ PosixFileAccess::~PosixFileAccess()
 bool PosixFileAccess::sysstat(m_time_t* mtime, m_off_t* size)
 {
     struct stat statbuf;
+    retry = false;
 
     if (!stat(localname.c_str(), &statbuf))
     {
@@ -73,7 +74,7 @@ bool PosixFileAccess::sysstat(m_time_t* mtime, m_off_t* size)
         return true;
     }
 
-    return true;
+    return false;
 }
 
 bool PosixFileAccess::sysopen()
@@ -155,6 +156,16 @@ bool PosixFileAccess::fopen(string* f, bool read, bool write)
     {
         if (!fstat(fd, &statbuf))
         {
+            #ifdef __MACH__
+                //If creation time equal to kMagicBusyCreationDate
+                if(statbuf.st_birthtimespec.tv_sec == -2082844800)
+                {
+                    LOG_debug << "File is busy: " << f->c_str();
+                    retry = true;
+                    return false;
+                }
+            #endif
+
             size = statbuf.st_size;
             mtime = statbuf.st_mtime;
             type = S_ISDIR(statbuf.st_mode) ? FOLDERNODE : FILENODE;
@@ -183,9 +194,10 @@ PosixFileSystemAccess::PosixFileSystemAccess(int fseventsfd)
     localseparator = "/";
 
 #ifdef USE_INOTIFY
+    lastcookie = 0;
+    lastlocalnode = NULL;
     if ((notifyfd = inotify_init1(IN_NONBLOCK)) >= 0)
     {
-        lastcookie = 0;
         notifyfailed = false;
     }
 #endif
@@ -215,7 +227,7 @@ PosixFileSystemAccess::PosixFileSystemAccess(int fseventsfd)
 #define FSEVENTS_WANT_EXTENDED_INFO _IO('s', 102)
 
     int fd;
-    struct fsevent_clone_args fca;
+    fsevent_clone_args fca;
     int8_t event_list[] = { // action to take for each event
                               FSE_REPORT,  // FSE_CREATE_FILE,
                               FSE_REPORT,  // FSE_DELETE,
@@ -283,7 +295,6 @@ void PosixFileSystemAccess::addevents(Waiter* w, int flags)
 }
 
 // read all pending inotify events and queue them for processing
-// FIXME: ignore sync-specific debris folder
 int PosixFileSystemAccess::checkevents(Waiter* w)
 {
     int r = 0;
@@ -356,15 +367,16 @@ int PosixFileSystemAccess::checkevents(Waiter* w)
                                 lastcookie = 0;
 
                                 ignore = &it->second->sync->dirnotify->ignore;
+                                unsigned int insize = strlen(in->name);
 
-                                if (strlen(in->name) < ignore->size()
+                                if (insize < ignore->size()
                                  || memcmp(in->name, ignore->data(), ignore->size())
-                                 || (strlen(in->name) > ignore->size()
+                                 || (insize > ignore->size()
                                   && memcmp(in->name + ignore->size(), localseparator.c_str(), localseparator.size())))
                                 {
                                     it->second->sync->dirnotify->notify(DirNotify::DIREVENTS,
                                                                         it->second, in->name,
-                                                                        strlen(in->name));
+                                                                        insize);
 
                                     r |= Waiter::NEEDEXEC;
                                 }
@@ -445,6 +457,8 @@ int PosixFileSystemAccess::checkevents(Waiter* w)
     sync_list::iterator it;
     fd_set rfds;
     timeval tv = { 0 };
+    static char rsrc[] = "/..namedfork/rsrc";
+    static unsigned int rsrcsize = sizeof(rsrc) - 1;
 
     if (notifyfd < 0)
     {
@@ -503,16 +517,21 @@ int PosixFileSystemAccess::checkevents(Waiter* w)
             for (i = n; i--; )
             {
                 path = paths[i];
+                unsigned int psize = strlen(path);
 
                 for (it = client->syncs.begin(); it != client->syncs.end(); it++)
                 {
-                    int s = (*it)->localroot.localname.size();
+                    int rsize = (*it)->localroot.localname.size();
+                    int isize = (*it)->dirnotify->ignore.size();
 
-                    if (!memcmp((*it)->localroot.localname.c_str(), path, s)    // prefix match
-                      && (!path[s] || path[s] == '/')               // at end: end of path or path separator
-                      && (memcmp(path + s + 1, (*it)->dirnotify->ignore.c_str(), (*it)->dirnotify->ignore.size())
-                       || (path[s + (*it)->dirnotify->ignore.size() + 1]
-                        && path[s + (*it)->dirnotify->ignore.size() + 1] != '/')))
+                    if (psize >= rsize
+                      && !memcmp((*it)->localroot.localname.c_str(), path, rsize)    // prefix match
+                      && (!path[rsize] || path[rsize] == '/')               // at end: end of path or path separator
+                      && (psize <= (rsize + isize)                          // not ignored
+                          || (path[rsize + isize + 1] && path[rsize + isize + 1] != '/')
+                          || memcmp(path + rsize + 1, (*it)->dirnotify->ignore.c_str(), isize))
+                      && (psize < rsrcsize                                  // it isn't a resource fork
+                          || memcmp(path + psize - rsrcsize, rsrc, rsrcsize)))
                         {
                             paths[i] += (*it)->localroot.localname.size() + 1;
                             pathsync[i] = *it;
@@ -589,6 +608,9 @@ bool PosixFileSystemAccess::renamelocal(string* oldname, string* newname, bool)
     target_exists = errno == EEXIST;
     transient_error = errno == ETXTBSY || errno == EBUSY;
 
+    int e = errno;
+    LOG_warn << "Unable to move file: " << oldname->c_str() << " to " << newname->c_str() << ". Error code: " << e;
+
     return false;
 }
 
@@ -601,6 +623,7 @@ bool PosixFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t
     // Linux-specific - kernel 2.6.33+ required
     if ((sfd = open(oldname->c_str(), O_RDONLY | O_DIRECT)) >= 0)
     {
+        LOG_verbose << "Copying via sendfile";
         if ((tfd = open(newname->c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0600)) >= 0)
         {
             while ((t = sendfile(tfd, sfd, NULL, 1024 * 1024 * 1024)) > 0);
@@ -609,6 +632,7 @@ bool PosixFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t
 
     if ((sfd = open(oldname->c_str(), O_RDONLY)) >= 0)
     {
+        LOG_verbose << "Copying via read/write";
         if ((tfd = open(newname->c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600)) >= 0)
         {
             while (((t = read(sfd, buf, sizeof buf)) > 0) && write(tfd, buf, t) == t);
@@ -619,6 +643,9 @@ bool PosixFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t
         {
             target_exists = errno == EEXIST;
             transient_error = errno == ETXTBSY || errno == EBUSY;
+
+            int e = errno;
+            LOG_warn << "Unable to copy file. Error code: " << e;
         }
 
         close(sfd);
@@ -626,7 +653,17 @@ bool PosixFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t
 
     if (!t)
     {
-        setmtimelocal(newname,mtime);
+#ifdef ENABLE_SYNC
+        t = !setmtimelocal(newname, mtime);
+#else
+        // fails in setmtimelocal are allowed in non sync clients.
+        setmtimelocal(newname, mtime);
+#endif
+    }
+    else
+    {
+        int e = errno;
+        LOG_debug << "Unable to copy file: " << oldname->c_str() << " to " << newname->c_str() << ". Error code: " << e;
     }
 
     return !t;
@@ -706,7 +743,6 @@ void PosixFileSystemAccess::emptydirlocal(string* name, dev_t basedev)
 
         closedir(dp);
     }
-
 }
 
 bool PosixFileSystemAccess::rmdirlocal(string* name)
@@ -733,11 +769,17 @@ bool PosixFileSystemAccess::mkdirlocal(string* name, bool)
     return r;
 }
 
-bool PosixFileSystemAccess::setmtimelocal(string* name, m_time_t mtime) const
+bool PosixFileSystemAccess::setmtimelocal(string* name, m_time_t mtime)
 {
     struct utimbuf times = { (time_t)mtime, (time_t)mtime };
 
-    return !utime(name->c_str(), &times);
+    bool success = !utime(name->c_str(), &times);
+    if (!success)
+    {
+        transient_error = errno == ETXTBSY || errno == EBUSY;
+    }
+
+    return success;
 }
 
 bool PosixFileSystemAccess::chdirlocal(string* name) const
@@ -819,6 +861,8 @@ PosixDirNotify::PosixDirNotify(string* localbasepath, string* ignore) : DirNotif
 #ifdef __MACH__
     failed = false;
 #endif
+
+    fsaccess = NULL;
 }
 
 void PosixDirNotify::addnotify(LocalNode* l, string* path)
@@ -854,16 +898,12 @@ void PosixDirNotify::delnotify(LocalNode* l)
 
 fsfp_t PosixDirNotify::fsfingerprint()
 {
-#ifdef __MACH__
-    return 0;
-#else
     struct statfs statfsbuf;
 
     // FIXME: statfs() does not really do what we want.
     if (statfs(localbasepath.c_str(), &statfsbuf)) return 0;
 
     return *(fsfp_t*)&statfsbuf.f_fsid + 1;
-#endif
 }
 
 FileAccess* PosixFileSystemAccess::newfileaccess()
@@ -982,6 +1022,8 @@ PosixDirAccess::PosixDirAccess()
 {
     dp = NULL;
     globbing = false;
+    memset(&globbuf, 0, sizeof(glob_t));
+    globindex = 0;
 }
 
 PosixDirAccess::~PosixDirAccess()

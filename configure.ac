@@ -2,7 +2,7 @@
 # @file configure.ac
 # @brief an input file for autoconf tool
 #
-# (c) 2013-2014 by Mega Limited, Wellsford, New Zealand
+# (c) 2013-2015 by Mega Limited, Auckland, New Zealand
 #
 # This file is part of the MEGA SDK - Client Access Engine.
 #
@@ -32,7 +32,7 @@ AC_PREREQ([2.61])
 # The Mega SDK version number is generated into config.h.
 # The version in Git should reflect the *next* version planned.
 m4_define([mega_major_version], [2])
-m4_define([mega_minor_version], [5])
+m4_define([mega_minor_version], [6])
 m4_define([mega_micro_version], [0])
 m4_define([mega_version],
           [mega_major_version.mega_minor_version.mega_micro_version])
@@ -42,7 +42,7 @@ m4_define([mega_lt_revision], [0])
 m4_define([mega_lt_current], [m4_eval(100 * mega_minor_version + mega_micro_version)])
 m4_define([mega_lt_age], [0])
 
-AC_INIT([libmega], [mega_version], [https://github.com/megaprivacy])
+AC_INIT([libmega], [mega_version], [https://github.com/meganz/sdk])
 
 # Define _GNU_SOURCE
 # AC_GNU_SOURCE
@@ -137,7 +137,7 @@ AC_STRUCT_TM
 AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
 
-AC_CHECK_HEADERS([arpa/inet.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h sys/socket.h sys/timeb.h htonl])
+AC_CHECK_HEADERS([arpa/inet.h netdb.h netinet/in.h stddef.h stdint.h stdlib.h sys/socket.h sys/timeb.h htonl glob.h malloc.h sys/malloc.h malloc/malloc.h])
 
 # Debug
 AC_ARG_ENABLE(debug,
@@ -161,10 +161,9 @@ AX_CHECK_COMPILE_FLAG([-fPIC], [
 
 
 AM_CONDITIONAL(ENABLE_STATIC, test x$enable_static = xyes)
-if test x$enable_static = xyes; then
-    LIBS="-ldl $LIBS"
-fi
 AC_SUBST(ENABLE_STATIC)
+
+AC_CHECK_LIB(dl, dlopen, [LIBS="-ldl $LIBS"])
 
 # Check for inotify support.
 AC_ARG_ENABLE(inotify,
@@ -184,7 +183,9 @@ AC_CHECK_LIB([sendfile], [sendfile])
 AC_CHECK_LIB([socket], [socket])
 AC_CHECK_LIB([rt], [clock_gettime])
 
-AC_FUNC_MALLOC
+# check for malloc only on for native builds
+# users report issues with cross-compiling builds
+#AS_IF([test "x$cross_compiling" != "xyes"], [AC_FUNC_MALLOC AC_FUNC_REALLOC])
 
 # Check if building for Win32, determine Win32 API libs
 WIN32=no
@@ -221,6 +222,8 @@ AC_ARG_ENABLE(posix-threads,
     [enable_posix_threads=yes])
 if test x$enable_posix_threads != xno; then
     AC_CHECK_LIB(pthread, pthread_create, [HAVE_PTHREAD=yes], [HAVE_PTHREAD=no])
+else
+    HAVE_PTHREAD=no
 fi
 if test "$HAVE_PTHREAD" = "yes"; then
     AC_DEFINE(USE_PTHREAD, 1, [Defined if pthreads are available])
@@ -400,13 +403,10 @@ AC_ARG_WITH(sodium,
    esac
   ],
   [AC_MSG_RESULT([--with-sodium not specified])
-    AC_CHECK_HEADERS([sodium/core.h],, [
-        AC_MSG_NOTICE([sodium/core.h header not found or not usable])
-    ])
-    AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium" sodium=true],[
-            AC_MSG_NOTICE([Could not find libsodium])
-    ])
-  ])
+    AC_CHECK_HEADERS([sodium/core.h], [sodium=true], [])
+    AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium"],[])
+    ]
+  )
 AC_SUBST(SODIUM_CXXFLAGS)
 AC_SUBST(SODIUM_CPPFLAGS)
 AC_SUBST(SODIUM_LDFLAGS)
@@ -671,10 +671,11 @@ if test "x$WIN32" = "xno" ; then
             AC_CHECK_HEADERS([openssl/ssl.h], [],
                 AC_MSG_ERROR([ssl.h header not found or not usable])
             )
-            AC_CHECK_LIB(ssl, [SSL_new], [LIBSSL_LIBS="-lssl"],
+            LIBS="-lcrypto $LIBS"
+            AC_CHECK_LIB(ssl, [SSL_new], [LIBSSL_LIBS="-lssl -lcrypto"],
                 AC_MSG_ERROR([Could not find OpenSSL library!])
             )
-
+            LIBS=$SAVE_LIBS
             AC_SUBST(LIBSSL_LIBS)
             openssl=true
          ;;
@@ -714,10 +715,11 @@ if test "x$WIN32" = "xno" ; then
         AC_CHECK_HEADERS([openssl/ssl.h], [],
             AC_MSG_ERROR([ssl.h header not found or not usable])
         )
-        AC_CHECK_LIB(ssl, [SSL_new], [LIBSSL_LIBS="-lssl"],
+        LIBS="-lcrypto $LIBS"
+        AC_CHECK_LIB(ssl, [SSL_new], [LIBSSL_LIBS="-lssl -lcrypto"],
             AC_MSG_ERROR([Could not find OpenSSL library!])
         )
-
+        LIBS=$SAVE_LIBS
         AC_SUBST(LIBSSL_LIBS)
         openssl=true
       ]
@@ -997,6 +999,7 @@ if test "x$freeimage" = "xtrue" ; then
 fi
 AM_CONDITIONAL([USE_FREEIMAGE], [test "x$freeimage" = "xtrue"])
 
+USE_FUSE=0
 # if Examples are enables, check for specific libraries
 if test "x$enable_examples" = "xyes" ; then
     #termcap
@@ -1008,15 +1011,52 @@ if test "x$enable_examples" = "xyes" ; then
        no)
          ;;
        yes)
-        TERMCAP_LIBS="-ltermcap"
+        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"],
+            [AC_MSG_NOTICE([termcap library not found or not usable.])]
+        )
         ;;
        *)
-        TERMCAP_LDFLAGS="-L$with_termcap"
-        TERMCAP_LIBS="-ltermcap"
-        TERMCAP_CXXFLAGS="-I$with_termcap"
-        TERMCAP_CPPFLAGS="-I$with_termcap"
+
+        # determine if library is installed
+        if test -d "$with_termcap/lib"; then
+            LDFLAGS="-L$with_termcap/lib $LDFLAGS"
+            CXXFLAGS="-I$with_termcap/include $CXXFLAGS"
+            CPPFLAGS="-I$with_termcap/include $CPPFLAGS"
+
+            AC_CHECK_HEADERS([termcap.h],[
+                TERMCAP_LDFLAGS="-L$with_termcap/lib"
+                TERMCAP_CXXFLAGS="-I$with_termcap/include"
+                TERMCAP_CPPFLAGS="-I$with_termcap/include"],
+                AC_MSG_NOTICE([termcap.h header not found or not usable])
+            )
+        else
+            LDFLAGS="-L$with_termcap $LDFLAGS"
+            CXXFLAGS="-I$with_termcap $CXXFLAGS"
+            CPPFLAGS="-I$with_termcap $CPPFLAGS"
+
+            AC_CHECK_HEADERS([termcap.h],[
+                TERMCAP_LDFLAGS="-L$with_termcap"
+                TERMCAP_CXXFLAGS="-I$with_termcap"
+                TERMCAP_CPPFLAGS="-I$with_termcap"],
+                AC_MSG_NOTICE([termcap.h header not found or not usable])
+            )
+        fi
+
+        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"], [
+            AC_MSG_NOTICE([termcap library not found or not usable.])])
+
+        #restore
+        LDFLAGS=$SAVE_LDFLAGS
+        CXXFLAGS=$SAVE_CXXFLAGS
+        CPPFLAGS=$SAVE_CPPFLAGS
+
         ;;
        esac
+      ],
+      [AC_MSG_RESULT([--with-termcap not specified])
+        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"],
+            [AC_MSG_NOTICE([termcap library not found or not usable.])]
+        )
       ]
     )
     AC_SUBST(TERMCAP_LDFLAGS)
@@ -1028,22 +1068,23 @@ if test "x$enable_examples" = "xyes" ; then
     AC_MSG_CHECKING(for Readline)
     AC_ARG_WITH(readline,
       AS_HELP_STRING(--with-readline=PATH, base of Readline installation),
-      [AC_MSG_RESULT($with_redline)
+      [AC_MSG_RESULT($with_readline)
        case $with_readline in
        no)
+        AC_MSG_ERROR([readline library is required for the sample client.])
          ;;
        yes)
         AC_CHECK_HEADERS([readline/readline.h],, [
             AC_MSG_ERROR([readline/readline.h header not found or not usable])
         ])
+        # readline requires termcap (or ncurses)
+        SAVE_LIBS=$LIBS
+        LIBS="$TERMCAP_LIBS $LIBS"
         AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
             AC_MSG_ERROR([readline library is required for the sample client.])])
-
+        LIBS=$SAVE_LIBS
          ;;
        *)
-
-        SAVE_LIBS=$LIBS
-        LIBS="-ltermcap $LIBS"
 
         # determine if library is installed
         if test -d "$with_readline/lib"; then
@@ -1066,11 +1107,14 @@ if test "x$enable_examples" = "xyes" ; then
             )
         fi
 
+        # readline requires termcap (or ncurses)
+        SAVE_LIBS=$LIBS
+        LIBS="$TERMCAP_LIBS $LIBS"
         AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
             AC_MSG_ERROR([readline library is required for the sample client.])])
+        LIBS=$SAVE_LIBS
 
         #restore
-        LIBS=$SAVE_LIBS
         LDFLAGS=$SAVE_LDFLAGS
         CXXFLAGS=$SAVE_CXXFLAGS
         CPPFLAGS=$SAVE_CPPFLAGS
@@ -1081,16 +1125,83 @@ if test "x$enable_examples" = "xyes" ; then
         AC_CHECK_HEADERS([readline/readline.h],, [
             AC_MSG_ERROR([readline/readline.h header not found or not usable])
         ])
+        # readline requires termcap (or ncurses)
+        SAVE_LIBS=$LIBS
+        LIBS="$TERMCAP_LIBS $LIBS"
         AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
             AC_MSG_ERROR([readline library is required for the sample client.])])
+        LIBS=$SAVE_LIBS
       ]
       )
       AC_SUBST(RL_LDFLAGS)
       AC_SUBST(RL_LIBS)
       AC_SUBST(RL_CXXFLAGS)
+
+    # FUSE
+    AC_MSG_CHECKING(for FUSE)
+    AC_ARG_WITH(fuse,
+      AS_HELP_STRING(--with-fuse=PATH, base of FUSE installation),
+      [AC_MSG_RESULT($with_fuse)
+       case $with_fuse in
+       no)
+         ;;
+       yes)
+        CXXFLAGS="$CXXFLAGS -D_FILE_OFFSET_BITS=64"
+        CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64"
+
+        AC_CHECK_HEADERS([fuse.h], [USE_FUSE=1], [
+            AC_MSG_ERROR([fuse.h header not found or not usable])])
+
+        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [
+            AC_MSG_ERROR([FUSE library is required for the sample client.])])
+
+        FUSE_CXXFLAGS="-D_FILE_OFFSET_BITS=64 -std=c++11"
+
+        CXXFLAGS=$SAVE_CXXFLAGS
+        CPPFLAGS=$SAVE_CPPFLAGS
+         ;;
+       *)
+
+        LDFLAGS="-L$with_fuse/lib $LDFLAGS"
+        CXXFLAGS="-I$with_fuse/include $CXXFLAGS -D_FILE_OFFSET_BITS=64"
+        CPPFLAGS="-I$with_fuse/include $CPPFLAGS -D_FILE_OFFSET_BITS=64"
+
+        AC_CHECK_HEADERS([fuse.h], [
+            USE_FUSE=1
+            FUSE_LDFLAGS="-L$with_fuse/lib "
+            FUSE_CXXFLAGS="-I$with_fuse/include -D_FILE_OFFSET_BITS=64 -std=c++11"],
+            [AC_MSG_ERROR([fuse.h header not found or not usable])]
+        )
+
+        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [
+            AC_MSG_ERROR([FUSE library is required for the sample client.])])
+
+        #restore
+        LDFLAGS=$SAVE_LDFLAGS
+        CXXFLAGS=$SAVE_CXXFLAGS
+        CPPFLAGS=$SAVE_CPPFLAGS
+        ;;
+       esac
+      ],
+      [AC_MSG_RESULT([--with-fuse not specified])
+        CXXFLAGS="$CXXFLAGS -D_FILE_OFFSET_BITS=64"
+        AC_CHECK_HEADERS([fuse.h], [
+            USE_FUSE=1
+            FUSE_CXXFLAGS="-D_FILE_OFFSET_BITS=64 -std=c++11"],
+            [USE_FUSE=0]
+        )
+        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [USE_FUSE=0])
+        CXXFLAGS=$SAVE_CXXFLAGS
+      ]
+      )
+
+      AC_SUBST(FUSE_LDFLAGS)
+      AC_SUBST(FUSE_LIBS)
+      AC_SUBST(FUSE_CXXFLAGS)
 fi
 
-
+AC_SUBST(USE_FUSE)
+AM_CONDITIONAL([BUILD_FUSE_EXAMPLE], [test "x$USE_FUSE" = "x1"])
 
 if test "x$WIN32" = "xyes" ; then
     AC_MSG_CHECKING(for WinHTTP)
@@ -1131,6 +1242,172 @@ fi
 AM_CONDITIONAL([BUILD_TESTS], [test "$enable_tests" = "yes"])
 AC_MSG_RESULT([$enable_tests])
 
+
+## Bindings
+
+# Python
+AC_MSG_CHECKING([if building Python bindings])
+AC_ARG_ENABLE(python,
+    AS_HELP_STRING([--enable-python], [build Python language bindings]),
+    [AC_MSG_RESULT([$enableval])],
+    [
+     AC_MSG_RESULT([$enableval])
+     enable_python=no]
+)
+
+USE_PYTHON3=no
+if test "x$enable_python" = "xyes" ; then
+
+    AC_ARG_WITH(python3,
+      AS_HELP_STRING([--with-python3], [build Python 3 language bindings]),
+      [
+       case $with_python3 in
+       yes)
+        USE_PYTHON3=yes
+         ;;
+       *)
+        USE_PYTHON3=yes
+        ;;
+       esac
+      ],
+    )
+
+    if test "x$USE_PYTHON3" = "xyes" ; then
+        SWIG_FLAGS="-py3"
+	    AC_SUBST([SWIG_FLAGS])
+
+        AM_PATH_PYTHON(3)
+        AX_PYTHON_DEVEL(>= '3.0.0')
+    else
+        AM_PATH_PYTHON
+        AX_PYTHON_DEVEL
+    fi
+
+    AX_PKG_SWIG(2.0.0, [], [
+        AC_MSG_ERROR([SWIG executable not found!])
+    ])
+    AX_SWIG_ENABLE_CXX
+    AX_SWIG_MULTI_MODULE_SUPPORT
+    AX_SWIG_PYTHON
+
+    if test -z "$SWIG"; then
+        AC_MSG_ERROR([SWIG executable not found!])
+    fi
+
+    if test -z "$PYTHON_VERSION"; then
+        AC_MSG_ERROR([Python development files not found!])
+    fi
+
+fi
+AM_CONDITIONAL([BUILD_PYTHON], [test "$enable_python" = "yes"])
+
+# PHP
+AC_MSG_CHECKING([if building PHP bindings])
+AC_ARG_ENABLE(php,
+    AS_HELP_STRING([--enable-php], [build PHP language bindings]),
+    [AC_MSG_RESULT([yes])],
+    [AC_MSG_RESULT([no])
+     enable_php=no]
+)
+if test "x$enable_php" = "xyes" ; then
+    AC_CHECK_PROGS(PHPCONFIG, php-config php5-config php-config5 php4-config php-config4)
+    AC_MSG_CHECKING(for PHP header files)
+    PHPINC="`$PHPCONFIG --includes 2>/dev/null`"
+    if test "$PHPINC"; then
+        AC_MSG_RESULT($PHPINC)
+    else
+        dirs="/usr/include/php /usr/local/include/php /usr/include/php5 /usr/local/include/php5 /usr/include/php4 /usr/local/include/php4 /usr/local/apache/php"
+        for i in $dirs; do
+            if test -r $i/main/php_config.h -o -r $i/main/php_version.h; then
+                AC_MSG_RESULT($i is found)
+                PHPEXT="$i"
+                PHPINC="-I$PHPEXT -I$PHPEXT/main -I$PHPEXT/TSRM -I$PHPEXT/Zend"
+                break;
+            fi
+        done
+    fi
+    if test -z "$PHPINC"; then
+        AC_MSG_ERROR([PHP headers not found!])
+    fi
+
+    AC_MSG_CHECKING(for PHP extension-dir)
+    PHPLIBDIR="`$PHPCONFIG --extension-dir 2>/dev/null | sed "s#/lib/#/lib${LIBPOSTFIX}/#g"`"
+    if test ! -z "$PHPLIBDIR"; then
+        AC_MSG_RESULT($PHPLIBDIR)
+    else
+        AC_MSG_ERROR([PHP development files not found!])
+    fi
+
+    AC_SUBST(PHPINC)
+	AC_SUBST(PHPEXT)
+	AC_SUBST(PHPLIBDIR)
+
+    AX_PKG_SWIG(2.0.0, [], [
+        AC_MSG_ERROR([SWIG executable not found!])
+    ])
+    AX_SWIG_ENABLE_CXX
+    AX_SWIG_MULTI_MODULE_SUPPORT
+
+    if test -z "$SWIG"; then
+        AC_MSG_ERROR([SWIG executable not found!])
+    fi
+fi
+AM_CONDITIONAL([BUILD_PHP], [test "$enable_php" = "yes"])
+
+# Java
+AC_MSG_CHECKING([if building Java bindings])
+AC_ARG_ENABLE(java,
+    AS_HELP_STRING([--enable-java], [build Java language bindings]),
+    [AC_MSG_RESULT([yes])],
+    [
+     AC_MSG_RESULT([no])
+     enable_java=no]
+)
+AC_ARG_WITH(java-include-dir,
+    AS_HELP_STRING([--with-java-include-dir=DIR], [look in DIR for Java headers]),
+	[JAVA_INCLUDE_DIR=$withval],)
+AC_SUBST(JAVA_INCLUDE_DIR)
+
+if test "x$enable_java" = "xyes" ; then
+    AX_PKG_SWIG(2.0.0, [], [
+        AC_MSG_ERROR([SWIG executable not found!])
+    ])
+    AX_SWIG_ENABLE_CXX
+    AX_SWIG_MULTI_MODULE_SUPPORT
+
+    if test -z "$SWIG"; then
+        AC_MSG_ERROR([SWIG executable not found!])
+    fi
+
+    AC_CHECK_PROG(JAVA, java, yes, no)
+    if test "x$JAVA" = "xno"; then
+      AC_MSG_ERROR([no java binary in PATH])
+    fi
+    AC_CHECK_PROG(JAVAC, javac, yes, no)
+    if test "x$JAVAC" = "xno"; then
+      AC_MSG_ERROR([no javac binary in PATH])
+    fi
+    AC_CHECK_PROG(JAR, jar, yes, no)
+    if test "x$JAR" = "xno"; then
+      AC_MSG_ERROR([no jar binary in PATH])
+    fi
+
+    SAVE_CPPFLAGS=$CPPFLAGS
+    CPPFLAGS="$CPPFLAGS -I$JAVA_INCLUDE_DIR"
+
+    # on Fedora / CentOS jni_md.h header is not included
+    if test -d "$JAVA_INCLUDE_DIR/linux"; then
+        CPPFLAGS="$CPPFLAGS -I$JAVA_INCLUDE_DIR/linux"
+        JAVA_INCLUDE_DIR_LINUX="$JAVA_INCLUDE_DIR/linux"
+        AC_SUBST(JAVA_INCLUDE_DIR_LINUX)
+    fi
+
+    AC_CHECK_HEADER(jni.h,, [AC_MSG_ERROR([could not find jni.h, please specify JAVA include directory using --with-java-include-dir option.])])
+    CPPFLAGS=$SAVE_CPPFLAGS
+fi
+AM_CONDITIONAL([BUILD_JAVA], [test "$enable_java" = "yes"])
+
+
 dnl #########################################################################
 dnl Doxygen settings
 dnl #########################################################################
@@ -1152,6 +1429,7 @@ AC_CONFIG_FILES([
  Makefile
  include/Makefile
  libmega.pc
+ doc/Doxyfile
 ])
 AC_OUTPUT
 
@@ -1171,6 +1449,11 @@ AC_MSG_NOTICE([Configured to build Mega SDK:
 
   inotify:          $enable_inotify
   posix threads:    $enable_posix_threads
+
+  Python bindings:  $enable_python
+  Python3 bindings: $USE_PYTHON3
+  PHP bindings:     $enable_php
+  Java bindings:    $enable_java
 
   OpenSSL:          $LIBSSL_FLAGS $LIBSSL_LDFLAGS $LIBSSL_LIBS
   Crypto++:         $CRYPTO_CXXFLAGS $CRYPTO_LDFLAGS $CRYPTO_LIBS

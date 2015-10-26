@@ -1,4 +1,4 @@
-#ifndef QTMEGALISTENER_H
+﻿#ifndef QTMEGALISTENER_H
 #define QTMEGALISTENER_H
 
 #include <QObject>
@@ -24,9 +24,14 @@ public:
 	virtual void onTransferTemporaryError(MegaApi *api, MegaTransfer *transfer, MegaError* e);
     virtual void onUsersUpdate(MegaApi* api, MegaUserList *users);
     virtual void onNodesUpdate(MegaApi* api, MegaNodeList *nodes);
+    virtual void onAccountUpdate(MegaApi* api);
 	virtual void onReloadNeeded(MegaApi* api);
-    virtual void onSyncStateChanged(MegaApi* api);
-    virtual void onSyncFileStateChanged(MegaApi *api, const char *filePath, int newState);
+
+#ifdef ENABLE_SYNC
+    virtual void onSyncStateChanged(MegaApi *api,  MegaSync *sync);
+    virtual void onSyncFileStateChanged(MegaApi *api, MegaSync *sync, const char *filePath, int newState);
+    virtual void onGlobalSyncStateChanged(MegaApi* api);
+#endif
 
 protected:
     virtual void customEvent(QEvent * event);

@@ -10,7 +10,7 @@
 #define __MegaLib__CGMegaGFX__
 
 #include "mega.h"
-#import <ImageIO/CGImageSource.h>
+#include <ImageIO/CGImageSource.h>
 
 // bitmap graphics processor
 class MEGA_API GfxProcCG : public mega::GfxProc
@@ -22,7 +22,7 @@ class MEGA_API GfxProcCG : public mega::GfxProc
     CGImageRef createThumbnailWithMaxSize(int size);
     int maxSizeForThumbnail(const int rw, const int rh);
 private: // mega::GfxProc implementations
-    bool isgfx(mega::string* name);
+    const char* supportedformats();
     bool readbitmap(mega::FileAccess*, mega::string*, int);
     bool resizebitmap(int, int, mega::string*);
     void freebitmap();

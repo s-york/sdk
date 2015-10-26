@@ -44,9 +44,21 @@ include src/include.am
 include examples/include.am
 include tests/include.am
 
+if BUILD_PYTHON
+include bindings/python/include.am
+endif
+
+if BUILD_PHP
+include bindings/php/include.am
+endif
+
+if BUILD_JAVA
+include bindings/java/include.am
+endif
+
 SUBDIRS = include
 
-EXTRA_DIST = autogen.sh
+EXTRA_DIST += autogen.sh
 EXTRA_DIST += libmega.pc.in
 EXTRA_DIST += $(DX_CONFIG)
 EXTRA_DIST += m4/ax_prog_doxygen.m4

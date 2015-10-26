@@ -44,13 +44,13 @@ typedef int64_t m_off_t;
 typedef uint64_t fsfp_t;
 
 #ifdef USE_CRYPTOPP
-#include "crypto/cryptopp.h"
+#include "mega/crypto/cryptopp.h"
 #else
 #include "megacrypto.h"
 #endif
 
 #ifdef USE_SODIUM
-#include "crypto/sodium.h"
+#include "mega/crypto/sodium.h"
 #endif
 
 namespace mega {
@@ -60,6 +60,7 @@ using namespace std;
 struct AttrMap;
 class BackoffTimer;
 class Command;
+class CommandLoadBalancing;
 struct DirectRead;
 struct DirectReadNode;
 struct DirectReadSlot;
@@ -79,9 +80,11 @@ class PubKeyAction;
 class Request;
 struct Transfer;
 class TreeProc;
+class LocalTreeProc;
 struct User;
 struct Waiter;
 struct Proxy;
+struct PendingContactRequest;
 
 #define EOO 0
 
@@ -137,14 +140,15 @@ typedef enum ErrorCodes
     API_EKEY = -14,                 ///< Cryptographic error.
     API_ESID = -15,                 ///< Bad session ID.
     API_EBLOCKED = -16,             ///< Resource administratively blocked.
-    API_EOVERQUOTA = -17,           ///< Quote exceeded.
+    API_EOVERQUOTA = -17,           ///< Quota exceeded.
     API_ETEMPUNAVAIL = -18,         ///< Resource temporarily not available.
     API_ETOOMANYCONNECTIONS = -19,  ///< Too many connections on this resource.
     API_EWRITE = -20,               /**< File could not be written to (or failed
                                          post-write integrity check). */
     API_EREAD = -21,                /**< File could not be read from (or changed
                                          unexpectedly during reading). */
-    API_EAPPKEY = -22               ///< Invalid or missing application key.
+    API_EAPPKEY = -22,              ///< Invalid or missing application key.
+    API_ESSL = -23                  ///< SSL verification failed
 } error;
 
 // returned by loggedin()
@@ -199,6 +203,12 @@ typedef uint64_t nameid;
 // FULL - all operations that do not require ownership permitted
 // OWNER - node is in caller's ROOT, INCOMING or RUBBISH trees
 typedef enum { ACCESS_UNKNOWN = -1, RDONLY = 0, RDWR, FULL, OWNER, OWNERPRELOGIN } accesslevel_t;
+
+// operations for outgoing pending contacts
+typedef enum { OPCA_ADD = 0, OPCA_DELETE, OPCA_REMIND} opcactions_t;
+// operations for incoming pending contacts
+typedef enum { IPCA_ACCEPT = 0, IPCA_DENY, IPCA_IGNORE} ipcactions_t;
+
 
 typedef vector<struct Node*> node_vector;
 
@@ -267,6 +277,7 @@ typedef set<pair<handle, handle> > handlepair_set;
 // node and user vectors
 typedef vector<struct NodeCore*> nodecore_vector;
 typedef vector<struct User*> user_vector;
+typedef vector<struct PendingContactRequest*> pcr_vector;
 
 // actual user data (indexed by userid)
 typedef map<int, User> user_map;
@@ -340,6 +351,9 @@ typedef deque<Notification> notify_deque;
 
 // FIXME: use forward_list instad (C++11)
 typedef list<HttpReqCommandPutFA*> putfa_list;
+
+typedef map<handle, PendingContactRequest*> handlepcr_map;
+
 } // namespace
 
 #endif

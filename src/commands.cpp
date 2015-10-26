@@ -78,6 +78,7 @@ void HttpReqCommandPutFA::procresult()
                     }
                     else
                     {
+                        LOG_debug << "Sending file attribute data";
                         Node::copystring(&posturl, p);
                         post(client, data->data(), data->size());
                     }
@@ -113,7 +114,16 @@ void CommandGetFA::procresult()
     if (client->json.isnumeric())
     {
         if (it != client->fafcs.end())
-        {
+        {            
+            faf_map::iterator fafsit;
+            for (fafsit = it->second->fafs[0].begin(); fafsit != it->second->fafs[0].end(); )
+            {
+                // move from fresh to pending
+                it->second->fafs[1][fafsit->first] = fafsit->second;
+                it->second->fafs[0].erase(fafsit++);
+            }
+
+            it->second->e = (error)client->json.getint();
             it->second->req.status = REQ_FAILURE;
         }
 
@@ -351,17 +361,29 @@ void CommandDirectRead::procresult()
 }
 
 // request temporary source URL for full-file access (p == private node)
-CommandGetFile::CommandGetFile(TransferSlot* ctslot, byte* key, handle h, bool p)
+CommandGetFile::CommandGetFile(TransferSlot* ctslot, byte* key, handle h, bool p, const char *auth)
 {
     cmd("g");
-    arg(p ? "n" : "p", (byte*)&h, MegaClient::NODEHANDLE);
+    arg(p || auth ? "n" : "p", (byte*)&h, MegaClient::NODEHANDLE);
     arg("g", 1);
 
+    if(auth)
+    {
+        if(strlen(auth) == 8)
+        {
+            arg("en", auth);
+        }
+        else
+        {
+            arg("esid", auth);
+        }
+    }
+
     tslot = ctslot;
+    ph = h;
 
     if (!tslot)
     {
-        ph = h;
         memcpy(filekey, key, FILENODEKEYLENGTH);
     }
 }
@@ -595,7 +617,7 @@ void CommandGetFile::procresult()
     }
 }
 
-CommandSetAttr::CommandSetAttr(MegaClient* client, Node* n, SymmCipher* cipher)
+CommandSetAttr::CommandSetAttr(MegaClient* client, Node* n, SymmCipher* cipher, const char* prevattr)
 {
     cmd("a");
     notself(client);
@@ -610,13 +632,43 @@ CommandSetAttr::CommandSetAttr(MegaClient* client, Node* n, SymmCipher* cipher)
 
     h = n->nodehandle;
     tag = client->reqtag;
+    syncop = prevattr;
+
+    if(prevattr)
+    {
+        pa = prevattr;
+    }
 }
 
 void CommandSetAttr::procresult()
 {
     if (client->json.isnumeric())
     {
-        client->app->setattr_result(h, (error)client->json.getint());
+        error e = (error)client->json.getint();
+#ifdef ENABLE_SYNC
+        if(!e && syncop)
+        {
+            Node* node = client->nodebyhandle(h);
+            if(node)
+            {
+                Sync* sync = NULL;
+                for (sync_list::iterator it = client->syncs.begin(); it != client->syncs.end(); it++)
+                {
+                    if((*it)->tag == tag)
+                    {
+                        sync = (*it);
+                        break;
+                    }
+                }
+
+                if(sync)
+                {
+                    client->app->syncupdate_remote_rename(sync, node, pa.c_str());
+                }
+            }
+        }
+#endif
+        client->app->setattr_result(h, e);
     }
     else
     {
@@ -747,11 +799,29 @@ void CommandPutNodes::procresult()
     if (client->json.isnumeric())
     {
         e = (error)client->json.getint();
+        LOG_debug << "Putnodes error " << e;
 
 #ifdef ENABLE_SYNC
         if (source == PUTNODES_SYNC)
         {
+            if (e == API_EACCESS)
+            {
+                int creqtag = client->reqtag;
+                client->reqtag = 0;
+                client->sendevent(99402, "API_EACCESS putting node in sync transfer");
+                client->reqtag = creqtag;
+            }
+
             client->app->putnodes_result(e, type, NULL);
+
+            for (int i=0; i < nnsize; i++)
+            {
+                if (nn[i].localnode)
+                {
+                    nn[i].localnode->newnode = NULL;
+                }
+            }
+
             return client->putnodes_sync_result(e, nn, 0);
         }
         else
@@ -779,6 +849,10 @@ void CommandPutNodes::procresult()
                 {
                     e = API_OK;
                 }
+                else
+                {
+                    LOG_err << "Parse error (readnodes)";
+                }
                 break;
 
             default:
@@ -788,6 +862,8 @@ void CommandPutNodes::procresult()
                 }
 
                 e = API_EINTERNAL;
+                LOG_err << "Parse error (PutNodes)";
+
                 // fall through
             case EOO:
                 client->applykeys();
@@ -815,10 +891,12 @@ void CommandPutNodes::procresult()
     }
 }
 
-CommandMoveNode::CommandMoveNode(MegaClient* client, Node* n, Node* t, syncdel_t csyncdel)
+CommandMoveNode::CommandMoveNode(MegaClient* client, Node* n, Node* t, syncdel_t csyncdel, handle prevparent)
 {
     h = n->nodehandle;
     syncdel = csyncdel;
+    pp = prevparent;
+    syncop = pp != UNDEF;
 
     cmd("m");
     notself(client);
@@ -856,6 +934,31 @@ void CommandMoveNode::procresult()
                         do {
                             if (n == syncn)
                             {
+                                if(syncop)
+                                {
+                                    Sync* sync = NULL;
+                                    for (sync_list::iterator it = client->syncs.begin(); it != client->syncs.end(); it++)
+                                    {
+                                        if((*it)->tag == tag)
+                                        {
+                                            sync = (*it);
+                                            break;
+                                        }
+                                    }
+
+                                    if(sync)
+                                    {
+                                        if (n->type == FOLDERNODE)
+                                        {
+                                            sync->client->app->syncupdate_remote_folder_deletion(sync, n);
+                                        }
+                                        else
+                                        {
+                                            sync->client->app->syncupdate_remote_file_deletion(sync, n);
+                                        }
+                                    }
+                                }
+
                                 (*it)->syncdeleted = syncdel;
                                 break;
                             }
@@ -865,6 +968,27 @@ void CommandMoveNode::procresult()
                 else
                 {
                     syncn->syncdeleted = SYNCDEL_NONE;
+                }
+            }
+        }
+        else if(syncop)
+        {
+            Node *n = client->nodebyhandle(h);
+            if(n)
+            {
+                Sync *sync = NULL;
+                for (sync_list::iterator it = client->syncs.begin(); it != client->syncs.end(); it++)
+                {
+                    if((*it)->tag == tag)
+                    {
+                        sync = (*it);
+                        break;
+                    }
+                }
+
+                if(sync)
+                {
+                    client->app->syncupdate_remote_move(sync, n, client->nodebyhandle(pp));
                 }
             }
         }
@@ -929,18 +1053,91 @@ void CommandDelNode::procresult()
     }
 }
 
+CommandKillSessions::CommandKillSessions(MegaClient* client)
+{
+    cmd("usr");
+    arg("ko", 1); // Request to kill all sessions except the current one
+    
+    h = UNDEF;
+    tag = client->reqtag;
+}
+
+CommandKillSessions::CommandKillSessions(MegaClient* client, handle sessionid)
+{
+    cmd("usr");
+    beginarray("s");
+    element(sessionid, MegaClient::USERHANDLE);
+    endarray();
+    
+    h = sessionid;
+    tag = client->reqtag;
+}
+void CommandKillSessions::procresult()
+{
+    error e;
+
+    if (client->json.isnumeric())
+    {
+        e = (error)client->json.getint();
+    }
+    else
+    {
+        e = API_EINTERNAL;
+    }
+
+    client->app->sessions_killed(h, e);
+}
+
+CommandLogout::CommandLogout(MegaClient *client)
+{
+    cmd("sml");
+
+    tag = client->reqtag;
+}
+
+void CommandLogout::procresult()
+{
+    error e = (error)client->json.getint();
+    MegaApp *app = client->app;
+    if(!e)
+    {
+        if (client->sctable)
+        {
+            client->sctable->remove();
+        }
+
+#ifdef ENABLE_SYNC
+        for (sync_list::iterator it = client->syncs.begin(); it != client->syncs.end(); it++)
+        {
+            if((*it)->statecachetable)
+            {
+                (*it)->statecachetable->remove();
+            }
+        }
+#endif
+        client->locallogout();
+    }
+    app->logout_result(e);
+}
+
 // login request with user e-mail address and user hash
-CommandLogin::CommandLogin(MegaClient* client, const char* email, uint64_t emailhash)
+CommandLogin::CommandLogin(MegaClient* client, const char* email, uint64_t emailhash, const byte *sessionkey, int csessionversion)
 {
     cmd("us");
 
     // are we just performing a session validation?
     checksession = !email;
+    sessionversion = csessionversion;
 
     if (!checksession)
     {
         arg("user", email);
         arg("uh", (byte*)&emailhash, sizeof emailhash);
+    }
+
+    if (sessionkey)
+    {
+        arg("sek", sessionkey, SymmCipher::KEYLENGTH);
     }
 
     if (client->cachedscsn != UNDEF)
@@ -962,7 +1159,8 @@ void CommandLogin::procresult()
     byte hash[SymmCipher::KEYLENGTH];
     byte sidbuf[AsymmCipher::MAXKEYLENGTH];
     byte privkbuf[AsymmCipher::MAXKEYLENGTH * 2];
-    int len_k = 0, len_privk = 0, len_csid = 0, len_tsid = 0;
+    byte sek[SymmCipher::KEYLENGTH];
+    int len_k = 0, len_privk = 0, len_csid = 0, len_tsid = 0, len_sek = 0;
     handle me = UNDEF;
 
     for (;;)
@@ -975,6 +1173,10 @@ void CommandLogin::procresult()
 
             case 'u':
                 me = client->json.gethandle(MegaClient::USERHANDLE);
+                break;
+
+            case MAKENAMEID3('s', 'e', 'k'):
+                len_sek = client->json.storebinary(sek, sizeof sek);
                 break;
 
             case MAKENAMEID4('t', 's', 'i', 'd'):
@@ -1009,6 +1211,24 @@ void CommandLogin::procresult()
                     // decrypt and set master key
                     client->key.ecb_decrypt(hash);
                     client->key.setkey(hash);
+                }
+
+                if (len_sek)
+                {
+                    if (len_sek != SymmCipher::KEYLENGTH)
+                    {
+                        return client->app->login_result(API_EINTERNAL);
+                    }
+
+                    if (checksession && sessionversion)
+                    {
+                        byte k[SymmCipher::KEYLENGTH];
+                        memcpy(k, client->key.key, sizeof(k));
+
+                        client->key.setkey(sek);
+                        client->key.ecb_decrypt(k);
+                        client->key.setkey(k);
+                    }
                 }
 
                 if (len_tsid)
@@ -1061,6 +1281,11 @@ void CommandLogin::procresult()
 
                 client->me = me;
 
+                if (len_sek)
+                {
+                    client->sessionkey.assign((const char *)sek, sizeof(sek));
+                }
+
                 return client->app->login_result(API_OK);
 
             default:
@@ -1101,7 +1326,7 @@ CommandShareKeyUpdate::CommandShareKeyUpdate(MegaClient* client, handle_vector* 
             client->key.ecb_encrypt(n->sharekey->key, sharekey, SymmCipher::KEYLENGTH);
 
             element(h, MegaClient::NODEHANDLE);
-            element(client->me, 8);
+            element(client->me, MegaClient::USERHANDLE);
             element(sharekey, SymmCipher::KEYLENGTH);
         }
     }
@@ -1110,12 +1335,11 @@ CommandShareKeyUpdate::CommandShareKeyUpdate(MegaClient* client, handle_vector* 
 }
 
 // add/remove share; include node share keys if new share
-CommandSetShare::CommandSetShare(MegaClient* client, Node* n, User* u, accesslevel_t a, int newshare)
+CommandSetShare::CommandSetShare(MegaClient* client, Node* n, User* u, accesslevel_t a, int newshare, const char* msg, const char* personal_representation)
 {
     byte auth[SymmCipher::BLOCKSIZE];
     byte key[SymmCipher::KEYLENGTH];
     byte asymmkey[AsymmCipher::MAXKEYLENGTH];
-    string uid;
     int t;
 
     tag = client->restag;
@@ -1124,8 +1348,21 @@ CommandSetShare::CommandSetShare(MegaClient* client, Node* n, User* u, accesslev
     user = u;
     access = a;
 
-    cmd("s");
+    cmd("s2");
     arg("n", (byte*)&sh, MegaClient::NODEHANDLE);
+
+    // Only for inviting non-contacts
+    if (personal_representation)
+    {
+        this->personal_representation = personal_representation;
+        arg("e", personal_representation);
+    }
+
+    if (msg)
+    {
+        this->msg = msg;
+        arg("msg", msg);
+    }
 
     if (a != ACCESS_UNKNOWN)
     {
@@ -1244,7 +1481,7 @@ void CommandSetShare::procresult()
 
                         // repeat attempt with corrected share key
                         client->restag = tag;
-                        client->reqs[client->r].add(new CommandSetShare(client, n, user, access, 0));
+                        client->reqs.add(new CommandSetShare(client, n, user, access, 0, msg.c_str(), personal_representation.c_str()));
                         return;
                     }
                 }
@@ -1298,9 +1535,117 @@ void CommandSetShare::procresult()
     }
 }
 
+
+CommandSetPendingContact::CommandSetPendingContact(MegaClient* client, const char* temail, opcactions_t action, const char* msg, const char* oemail)
+{
+    cmd("upc");
+
+    if (oemail != NULL)
+    {
+        arg("e", oemail);
+    }
+
+    arg("u", temail);
+    switch (action)     
+    {   
+        case OPCA_DELETE:
+            arg("aa", "d");
+            break;
+        case OPCA_REMIND:
+            arg("aa", "r");
+            break;
+        case OPCA_ADD:          
+        default:
+            arg("aa", "a");
+            break;
+    }
+
+    if (msg != NULL)
+    {
+        arg("msg", msg);
+    }
+
+    tag = client->reqtag;
+    this->action = action;
+}
+
+void CommandSetPendingContact::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        return client->app->setpcr_result(UNDEF, (error)client->json.getint(), this->action);
+    }
+
+    handle p = UNDEF;
+    for (;;)
+    {
+        switch (client->json.getnameid())
+        {
+            case 'p':
+                p = client->json.gethandle(MegaClient::PCRHANDLE);  
+                break;              
+            case EOO:
+                if (ISUNDEF(p))
+                {
+                    LOG_err << "Error in CommandSetPendingContact. Undefined handle";
+                    client->app->setpcr_result(UNDEF, API_EINTERNAL, this->action);                    
+                }
+                else
+                {
+                    client->app->setpcr_result(p, API_OK, this->action);
+                }
+                return;
+            default:
+                if (!client->json.storeobject())
+                {
+                    LOG_err << "Error in CommandSetPendingContact. Parse error";
+                    client->app->setpcr_result(UNDEF, API_EINTERNAL, this->action);
+                    return;
+                }
+        }
+    }
+}
+
+CommandUpdatePendingContact::CommandUpdatePendingContact(MegaClient* client, handle p, ipcactions_t action)
+{
+    cmd("upca");   
+
+    arg("p", (byte*)&p, MegaClient::PCRHANDLE);
+    switch (action)     
+    {   
+        case IPCA_ACCEPT:
+            arg("aa", "a");
+            break;
+        case IPCA_DENY:
+            arg("aa", "d");
+            break;
+        case IPCA_IGNORE:          
+        default:
+            arg("aa", "i");
+            break;
+    }
+
+    tag = client->reqtag;
+    this->action = action;
+}
+
+void CommandUpdatePendingContact::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        return client->app->updatepcr_result((error)client->json.getint(), this->action);
+    }
+   
+    LOG_err << "Unexpected response for CommandUpdatePendingContact";
+    client->app->updatepcr_result(API_EINTERNAL, this->action);
+    return;    
+}
+
+
 CommandEnumerateQuotaItems::CommandEnumerateQuotaItems(MegaClient* client)
 {
     cmd("utqa");
+    arg("f", 1);
 
     tag = client->reqtag;
 }
@@ -1317,7 +1662,13 @@ void CommandEnumerateQuotaItems::procresult()
     unsigned amount;
     const char* a;
     const char* c;
+    const char* d;
+    const char* ios;
+    const char* android;
     string currency;
+    string description;
+    string ios_id;
+    string android_id;
 
     while (client->json.enterarray())
     {
@@ -1327,13 +1678,20 @@ void CommandEnumerateQuotaItems::procresult()
                 || ((gbtransfer = client->json.getint()) < 0)
                 || ((months = client->json.getint()) < 0)
                 || !(a = client->json.getvalue())
-                || !(c = client->json.getvalue()))
+                || !(c = client->json.getvalue())
+                || !(d = client->json.getvalue())
+                || !(ios = client->json.getvalue())
+                || !(android = client->json.getvalue()))
         {
             return client->app->enumeratequotaitems_result(API_EINTERNAL);
         }
 
 
         Node::copystring(&currency, c);
+        Node::copystring(&description, d);
+        Node::copystring(&ios_id, ios);
+        Node::copystring(&android_id, android);
+
 
         amount = atoi(a) * 100;
         if ((c = strchr(a, '.')))
@@ -1352,7 +1710,8 @@ void CommandEnumerateQuotaItems::procresult()
 
         client->app->enumeratequotaitems_result(product, prolevel, gbstorage,
                                                 gbtransfer, months, amount,
-                                                currency.c_str());
+                                                currency.c_str(), description.c_str(),
+                                                ios_id.c_str(), android_id.c_str());
         client->json.leavearray();
     }
 
@@ -1367,6 +1726,7 @@ CommandPurchaseAddItem::CommandPurchaseAddItem(MegaClient* client, int itemclass
     string sprice;
     sprice.resize(128);
     sprintf((char *)sprice.data(), "%.2f", price/100.0);
+    replace( sprice.begin(), sprice.end(), ',', '.');
     cmd("uts");
     arg("it", itemclass);
     arg("si", (byte*)&item, 8);
@@ -1430,14 +1790,69 @@ void CommandPurchaseCheckout::procresult()
 {
     if (client->json.isnumeric())
     {
-        return client->app->checkout_result((error)client->json.getint());
+        return client->app->checkout_result(NULL, (error)client->json.getint());
     }
 
-    string response;
+    //Expected response: "EUR":{"res":X,"code":Y}}
+    client->json.getnameid();
+    if (!client->json.enterobject())
+    {
+        LOG_err << "Parse error (CommandPurchaseCheckout)";
+        client->app->checkout_result(NULL, API_EINTERNAL);
+        return;
+    }
 
-    client->json.storeobject(&response);
+    error e = API_EINTERNAL;
+    string errortype;
+    for (;;)
+    {
+        switch (client->json.getnameid())
+        {
+            case MAKENAMEID3('r', 'e', 's'):
+                if (client->json.isnumeric())
+                {
+                    e = (error)client->json.getint();
+                }
+                else
+                {
+                    client->json.storeobject(&errortype);
+                    if (errortype == "S")
+                    {
+                        errortype.clear();
+                        e = API_OK;
+                    }
+                }
+                break;
 
-    client->app->checkout_result(response.c_str());
+            case MAKENAMEID4('c', 'o', 'd', 'e'):
+                if (client->json.isnumeric())
+                {
+                    e = (error)client->json.getint();
+                }
+                else
+                {
+                    LOG_err << "Parse error in CommandPurchaseCheckout (code)";
+                }
+                break;
+            case EOO:
+                client->json.leaveobject();
+                if (!errortype.size() || errortype == "FI" || e == API_OK)
+                {
+                    client->app->checkout_result(NULL, e);
+                }
+                else
+                {
+                    client->app->checkout_result(errortype.c_str(), e);
+                }
+                return;
+            default:
+                if (!client->json.storeobject())
+                {
+                    client->app->checkout_result(NULL, API_EINTERNAL);
+                    return;
+                }
+        }
+    }
 }
 
 CommandUserRequest::CommandUserRequest(MegaClient* client, const char* m, visibility_t show)
@@ -1495,7 +1910,7 @@ CommandGetUA::CommandGetUA(MegaClient* client, const char* uid, const char* an, 
 {
     priv = p;
     user = client->finduser((char*)uid);
-    attributename = (char*)an;
+    attributename = an;
 
     cmd("uga");
     arg("u", uid);
@@ -1512,8 +1927,8 @@ void CommandGetUA::procresult()
 
 #ifdef USE_SODIUM
         if ((e == API_ENOENT) && (user->userhandle == client->me)
-                && ((priv && strncmp(attributename, "prEd255", 7))
-                        || (!priv && strncmp(attributename, "puEd255", 7))))
+                && ((priv && strncmp(attributename.c_str(), "prEd255", 7))
+                        || (!priv && strncmp(attributename.c_str(), "puEd255", 7))))
         {
             // We apparently don't have Ed25519 keys, yet. Let's make 'em.
             if(!client->inited25519())
@@ -1522,7 +1937,7 @@ void CommandGetUA::procresult()
             }
 
             // Return the required key data.
-            if (strncmp(attributename, "prEd255", 7))
+            if (strncmp(attributename.c_str(), "prEd255", 7))
             {
                 return(client->app->getua_result(client->signkey.keySeed,
                                                  crypto_sign_SEEDBYTES));
@@ -1561,10 +1976,9 @@ void CommandGetUA::procresult()
 
         l = Base64::atob(ptr, data, l);
 
-        if (priv)
+        if (priv == 1)
         {
             d.assign((char*)data, l);
-            delete[] data;
 
             // Is the data a multiple of the cipher blocksize, then we're using
             // a zero IV.
@@ -1572,7 +1986,9 @@ void CommandGetUA::procresult()
             {
                 if (!PaddedCBC::decrypt(&d, &client->key))
                 {
-                    return(client->app->getua_result(API_EINTERNAL));
+                    delete[] data;
+                    client->app->getua_result(API_EINTERNAL);
+                    return;
                 }
             }
             else
@@ -1585,13 +2001,21 @@ void CommandGetUA::procresult()
                 d = payload;
                 if (!PaddedCBC::decrypt(&d, &client->key, &iv))
                 {
-                    return(client->app->getua_result(API_EINTERNAL));
+                    delete[] data;
+                    client->app->getua_result(API_EINTERNAL);
+                    return;
                 }
             }
-            return(client->app->getua_result((byte*)d.data(), d.size()));
+            client->app->getua_result((byte*)d.data(), d.size());
         }
-
-        client->app->getua_result(data, l);
+        else if (!priv || priv == 2)
+        {
+            client->app->getua_result(data, l);
+        }
+        else
+        {
+            client->app->getua_result(API_EARGS);
+        }
 
         delete[] data;
     }
@@ -1752,6 +2176,63 @@ void CommandPubKeyRequest::procresult()
     }
 }
 
+CommandGetUserData::CommandGetUserData(MegaClient *client)
+{
+    cmd("ug");
+
+    tag = client->reqtag;
+}
+
+void CommandGetUserData::procresult()
+{
+    string name;
+    string pubk;
+    string privk;
+    handle jid = UNDEF;
+    byte privkbuf[AsymmCipher::MAXKEYLENGTH * 2];
+    int len_privk = 0;
+
+    if (client->json.isnumeric())
+    {
+        return client->app->userdata_result(NULL, NULL, NULL, jid, (error)client->json.getint());
+    }
+
+    for (;;)
+    {
+        switch (client->json.getnameid())
+        {
+        case MAKENAMEID4('n', 'a', 'm', 'e'):
+            client->json.storeobject(&name);
+            break;
+
+        case 'u':
+            jid = client->json.gethandle(MegaClient::USERHANDLE);
+            break;
+
+        case MAKENAMEID4('p', 'u', 'b', 'k'):
+            client->json.storeobject(&pubk);
+            break;
+
+        case MAKENAMEID5('p', 'r', 'i', 'v', 'k'):
+            len_privk = client->json.storebinary(privkbuf, sizeof privkbuf);
+            client->key.ecb_decrypt(privkbuf, len_privk);
+            privk.resize(AsymmCipher::MAXKEYLENGTH * 2);
+            privk.resize(Base64::btoa(privkbuf, len_privk, (char *)privk.data()));
+            break;
+
+        case EOO:
+            client->app->userdata_result(&name, &pubk, &privk, jid, API_OK);
+            return;
+
+        default:
+            if (!client->json.storeobject())
+            {
+                return client->app->userdata_result(NULL, NULL, NULL, jid, API_EINTERNAL);
+            }
+        }
+    }
+}
+
 CommandGetUserQuota::CommandGetUserQuota(MegaClient* client, AccountDetails* ad, bool storage, bool transfer, bool pro)
 {
     details = ad;
@@ -1786,7 +2267,8 @@ void CommandGetUserQuota::procresult()
     }
 
     details->pro_level = 0;
-    details->subscription_type = 0;
+    details->subscription_type = 'O';
+    details->subscription_renew = 0;
 
     details->pro_until = 0;
 
@@ -1931,6 +2413,37 @@ void CommandGetUserQuota::procresult()
                 }
                 break;
 
+            case MAKENAMEID6('s', 'c', 'y', 'c', 'l', 'e'):
+                const char* scycle;
+                if ((scycle = client->json.getvalue()))
+                {
+                    memcpy(details->subscription_cycle, scycle, 3);
+                    details->subscription_cycle[3] = 0;
+                }
+                break;
+
+            case MAKENAMEID6('s', 'r', 'e', 'n', 'e', 'w'):
+                if (client->json.enterarray())
+                {
+                    details->subscription_renew = client->json.getint();
+                    while(!client->json.leavearray())
+                    {
+                        client->json.storeobject();
+                    }
+                }
+            break;
+
+            case MAKENAMEID3('s', 'g', 'w'):
+                if (client->json.enterarray())
+                {
+                    client->json.storeobject(&details->subscription_method);
+                    while(!client->json.leavearray())
+                    {
+                        client->json.storeobject();
+                    }
+                }
+            break;
+
             case MAKENAMEID6('s', 'u', 'n', 't', 'i', 'l'):
                 // expiry of last active Pro plan (may be different from current one)
                 details->pro_until = client->json.getint();
@@ -2055,6 +2568,7 @@ void CommandGetUserPurchases::procresult()
 CommandGetUserSessions::CommandGetUserSessions(MegaClient* client, AccountDetails* ad)
 {
     cmd("usl");
+    arg("x", 1); // Request the additional id and alive information
 
     details = ad;
     tag = client->reqtag;
@@ -2080,13 +2594,16 @@ void CommandGetUserSessions::procresult()
 
         details->sessions[t].current = (int)client->json.getint();
 
+        details->sessions[t].id = client->json.gethandle(8);
+        details->sessions[t].alive = (int)client->json.getint();
+
         client->json.leavearray();
     }
 
     client->app->account_details(details, false, false, false, false, false, true);
 }
 
-CommandSetPH::CommandSetPH(MegaClient* client, Node* n, int del)
+CommandSetPH::CommandSetPH(MegaClient* client, Node* n, int del, m_time_t ets)
 {
     cmd("l");
     arg("n", (byte*)&n->nodehandle, MegaClient::NODEHANDLE);
@@ -2096,8 +2613,13 @@ CommandSetPH::CommandSetPH(MegaClient* client, Node* n, int del)
         arg("d", 1);
     }
 
-    h = n->nodehandle;
-    tag = client->reqtag;
+    if (ets)
+    {
+        arg("ets", ets);
+    }
+
+    this->h = n->nodehandle;
+    this->tag = client->reqtag;
 }
 
 void CommandSetPH::procresult()
@@ -2410,8 +2932,9 @@ void CommandSetKeyPair::procresult()
 CommandFetchNodes::CommandFetchNodes(MegaClient* client)
 {
     cmd("f");
-    arg("c", "1", 0);
-    arg("r", "1", 0);
+    arg("c", 1);
+    arg("r", 1);
+    arg("ca", 1);
 
     tag = client->reqtag;
 }
@@ -2420,10 +2943,10 @@ CommandFetchNodes::CommandFetchNodes(MegaClient* client)
 void CommandFetchNodes::procresult()
 {
     client->purgenodesusersabortsc();
-    client->fetchingnodes = false;
 
     if (client->json.isnumeric())
     {
+        client->fetchingnodes = false;
         return client->app->fetchnodes_result((error)client->json.getint());
     }
 
@@ -2435,6 +2958,7 @@ void CommandFetchNodes::procresult()
                 // nodes
                 if (!client->readnodes(&client->json, 0))
                 {
+                    client->fetchingnodes = false;
                     return client->app->fetchnodes_result(API_EINTERNAL);
                 }
                 break;
@@ -2445,7 +2969,9 @@ void CommandFetchNodes::procresult()
                 break;
 
             case 's':
-                // outgoing shares
+                // Fall through
+            case MAKENAMEID2('p', 's'):
+                // outgoing or pending shares
                 client->readoutshares(&client->json);
                 break;
 
@@ -2453,6 +2979,7 @@ void CommandFetchNodes::procresult()
                 // users/contacts
                 if (!client->readusers(&client->json))
                 {
+                    client->fetchingnodes = false;
                     return client->app->fetchnodes_result(API_EINTERNAL);
                 }
                 break;
@@ -2471,31 +2998,43 @@ void CommandFetchNodes::procresult()
                 // share node
                 if (!client->setscsn(&client->json))
                 {
+                    client->fetchingnodes = false;
                     return client->app->fetchnodes_result(API_EINTERNAL);
                 }
+                break;
+
+            case MAKENAMEID3('i', 'p', 'c'):
+                // Incoming pending contact
+                client->readipc(&client->json);
+                break;
+
+            case MAKENAMEID3('o', 'p', 'c'):
+                // Outgoing pending contact
+                client->readopc(&client->json);
+                break;
+
+            case MAKENAMEID2('p', 'h'):
+                // Public links handles
+                client->procph(&client->json);
                 break;
 
             case EOO:
                 if (!*client->scsn)
                 {
+                    client->fetchingnodes = false;
                     return client->app->fetchnodes_result(API_EINTERNAL);
                 }
 
                 client->mergenewshares(0);
                 client->applykeys();
-#ifdef ENABLE_SYNC
-                client->syncsup = false;
-#endif
-                client->app->fetchnodes_result(API_OK);
                 client->initsc();
-
-                // NULL vector: "notify all nodes"
-                client->app->nodes_updated(NULL, client->nodes.size());
+                client->fetchnodestag = tag;
                 return;
 
             default:
                 if (!client->json.storeobject())
                 {
+                    client->fetchingnodes = false;
                     return client->app->fetchnodes_result(API_EINTERNAL);
                 }
         }
@@ -2528,4 +3067,363 @@ void CommandReportEvent::procresult()
         client->app->reportevent_result(API_EINTERNAL);
     }
 }
+
+// load balancing request
+CommandLoadBalancing::CommandLoadBalancing(MegaClient *client, const char *service)
+{
+    this->client = client;
+    this->service = service;
+
+    tag = client->reqtag;
+}
+
+void CommandLoadBalancing::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->loadbalancing_result(NULL, (error)client->json.getint());
+    }
+    else
+    {
+        error e = API_EINTERNAL;
+        if(!client->json.enterobject())
+        {
+            client->app->loadbalancing_result(NULL, API_EINTERNAL);
+            return;
+        }
+
+        string servers;
+        for (;;)
+        {
+            switch (client->json.getnameid())
+            {
+                case MAKENAMEID2('o', 'k'):
+                    if(client->json.isnumeric() && client->json.getint())
+                    {
+                        e = API_OK;
+                    }
+                    break;
+
+                case 'e':
+                    if(client->json.isnumeric())
+                    {
+                        e = (error)client->json.getint();
+                    }
+                    break;
+
+                case EOO:
+                    client->app->loadbalancing_result(e ? NULL : &servers, e);
+                    return;
+
+                default:
+                    if (!client->json.enterarray())
+                    {
+                        client->app->loadbalancing_result(NULL, API_EINTERNAL);
+                        return;
+                    }
+
+                    while(client->json.enterobject())
+                    {
+                        if(servers.size())
+                        {
+                            servers.append(";");
+                        }
+
+                        while (client->json.getnameid() != EOO)
+                        {
+                            string data;
+                            if (!client->json.storeobject(&data))
+                            {
+                                client->app->loadbalancing_result(NULL, API_EINTERNAL);
+                                return;
+                            }
+                            if(servers.size())
+                            {
+                                servers.append(":");
+                            }
+                            servers.append(data);
+                        }
+                    }
+                    client->json.leavearray();
+                    break;
+            }
+        }
+    }
+}
+
+CommandSubmitPurchaseReceipt::CommandSubmitPurchaseReceipt(MegaClient *client, int type, const char *receipt)
+{
+    cmd("vpay");
+    arg("t", type);
+
+    if(receipt)
+    {
+        arg("receipt", receipt);
+    }
+
+    if(type == 2 && client->loggedin() == FULLACCOUNT)
+    {
+        arg("user", client->finduser(client->me)->uid.c_str());
+    }
+
+    tag = client->reqtag;
+}
+
+void CommandSubmitPurchaseReceipt::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->submitpurchasereceipt_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->submitpurchasereceipt_result(API_EINTERNAL);
+    }
+}
+
+// Credit Card Store
+CommandCreditCardStore::CommandCreditCardStore(MegaClient* client, const char *cc, const char *last4, const char *expm, const char *expy, const char *hash)
+{
+    cmd("ccs");
+    arg("cc", cc);
+    arg("last4", last4);
+    arg("expm", expm);
+    arg("expy", expy);
+    arg("hash", hash);
+
+    tag = client->reqtag;
+}
+
+void CommandCreditCardStore::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->creditcardstore_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->creditcardstore_result(API_EINTERNAL);
+    }
+}
+
+CommandCreditCardQuerySubscriptions::CommandCreditCardQuerySubscriptions(MegaClient* client)
+{
+    cmd("ccqns");
+
+    tag = client->reqtag;
+}
+
+void CommandCreditCardQuerySubscriptions::procresult()
+{
+    int number = 0;
+    if (client->json.isnumeric())
+    {
+        number = client->json.getint();
+        if(number >= 0)
+        {
+            client->app->creditcardquerysubscriptions_result(number, API_OK);
+        }
+        else
+        {
+            client->app->creditcardquerysubscriptions_result(0, (error)number);
+        }
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->creditcardquerysubscriptions_result(0, API_EINTERNAL);
+    }
+}
+
+CommandCreditCardCancelSubscriptions::CommandCreditCardCancelSubscriptions(MegaClient* client, const char* reason)
+{
+    cmd("cccs");
+
+    if (reason)
+    {
+        arg("r", reason);
+    }
+
+    tag = client->reqtag;
+}
+
+void CommandCreditCardCancelSubscriptions::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->creditcardcancelsubscriptions_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->creditcardcancelsubscriptions_result(API_EINTERNAL);
+    }
+}
+
+CommandCopySession::CommandCopySession(MegaClient *client)
+{
+    cmd("us");
+    arg("c", 1);
+    tag = client->reqtag;
+}
+
+void CommandCopySession::procresult()
+{
+    string session;
+    byte sidbuf[AsymmCipher::MAXKEYLENGTH];
+    int len_csid = 0;
+
+    if (client->json.isnumeric())
+    {
+        client->app->copysession_result(NULL, (error)client->json.getint());
+        return;
+    }
+
+    for (;;)
+    {
+        switch (client->json.getnameid())
+        {
+            case MAKENAMEID4('c', 's', 'i', 'd'):
+                len_csid = client->json.storebinary(sidbuf, sizeof sidbuf);
+                break;
+
+            case EOO:
+                if (len_csid < 32)
+                {
+                    return client->app->copysession_result(NULL, API_EINTERNAL);
+                }
+
+                if (!client->asymkey.decrypt(sidbuf, len_csid, sidbuf, MegaClient::SIDLEN))
+                {
+                    return client->app->copysession_result(NULL, API_EINTERNAL);
+                }
+
+                session.resize(MegaClient::SIDLEN * 4 / 3 + 4);
+                session.resize(Base64::btoa(sidbuf, MegaClient::SIDLEN, (char *)session.data()));
+                return client->app->copysession_result(&session, API_OK);
+
+            default:
+                if (!client->json.storeobject())
+                {
+                    return client->app->copysession_result(NULL, API_EINTERNAL);
+                }
+        }
+    }
+}
+
+CommandGetPaymentMethods::CommandGetPaymentMethods(MegaClient *client)
+{
+    cmd("ufpq");
+    tag = client->reqtag;
+}
+
+void CommandGetPaymentMethods::procresult()
+{
+    int methods = 0;
+
+    if(!client->json.isnumeric())
+    {
+        LOG_err << "Parse error in ufpq";
+        client->app->getpaymentmethods_result(methods, API_EINTERNAL);
+        return;
+    }
+
+    do
+    {
+        int value = client->json.getint();
+        if(value < 0)
+        {
+            client->app->getpaymentmethods_result(methods, (error)value);
+
+            //Consume remaining values if they exist
+            while(client->json.isnumeric())
+            {
+                client->json.getint();
+            }
+            return;
+        }
+
+        methods |= 1 << value;
+    } while(client->json.isnumeric());
+
+    client->app->getpaymentmethods_result(methods, API_OK);
+}
+
+CommandUserFeedbackStore::CommandUserFeedbackStore(MegaClient *client, const char *type, const char *blob, const char *uid)
+{
+    cmd("clog");
+
+    arg("t", type);
+
+    if (blob)
+    {
+        arg("d", blob);
+    }
+
+    if (uid)
+    {
+        arg("id", uid);
+    }
+
+    tag = client->reqtag;
+}
+
+void CommandUserFeedbackStore::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->userfeedbackstore_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->userfeedbackstore_result(API_EINTERNAL);
+    }
+}
+
+CommandSendEvent::CommandSendEvent(MegaClient *client, int type, const char *desc)
+{
+    cmd("log");
+    arg("e", type);
+    arg("m", desc);
+
+    tag = client->reqtag;
+}
+
+void CommandSendEvent::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->sendevent_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->sendevent_result(API_EINTERNAL);
+    }
+}
+
+CommandCleanRubbishBin::CommandCleanRubbishBin(MegaClient *client)
+{
+    cmd("dr");
+
+    tag = client->reqtag;
+}
+
+void CommandCleanRubbishBin::procresult()
+{
+    if (client->json.isnumeric())
+    {
+        client->app->cleanrubbishbin_result((error)client->json.getint());
+    }
+    else
+    {
+        client->json.storeobject();
+        client->app->cleanrubbishbin_result(API_EINTERNAL);
+    }
+}
+
+
 } // namespace

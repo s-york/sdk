@@ -1,5 +1,5 @@
 /**
- * @file MEGAAcountDetails.mm
+ * @file MEGAAccountDetails.mm
  * @brief Details about a MEGA account
  *
  * (c) 2013-2014 by Mega Limited, Auckland, New Zealand
@@ -23,17 +23,14 @@
 
 using namespace mega;
 
-@interface MEGAAcountDetails ()
-
-- (instancetype)initWithMegaAccountDetails:(MegaAccountDetails *)accountDetails cMemoryOwn:(BOOL)cMemoryOwn;
-- (MegaAccountDetails *)getCPtr;
+@interface MEGAAccountDetails ()
 
 @property MegaAccountDetails *accountDetails;
 @property BOOL cMemoryOwn;
 
 @end
 
-@implementation MEGAAcountDetails
+@implementation MEGAAccountDetails
 
 - (instancetype)initWithMegaAccountDetails:(MegaAccountDetails *)accountDetails cMemoryOwn:(BOOL)cMemoryOwn {
     self = [super init];
@@ -53,7 +50,7 @@ using namespace mega;
 }
 
 - (instancetype)clone {
-    return self.accountDetails ? [[MEGAAcountDetails alloc] initWithMegaAccountDetails:self.accountDetails->copy() cMemoryOwn:YES] : nil;
+    return self.accountDetails ? [[MEGAAccountDetails alloc] initWithMegaAccountDetails:self.accountDetails->copy() cMemoryOwn:YES] : nil;
 }
 
 - (MegaAccountDetails *)getCPtr {
@@ -78,6 +75,30 @@ using namespace mega;
 
 - (MEGAAccountType)type {
     return (MEGAAccountType) (self.accountDetails ? self.accountDetails->getProLevel() : 0);
+}
+
+- (NSInteger)proExpiration {
+    return self.accountDetails ? self.accountDetails->getProExpiration() : 0;
+}
+
+- (MEGASubscriptionStatus)subscriptionStatus {
+    return (MEGASubscriptionStatus) (self.accountDetails ? self.accountDetails->getSubscriptionStatus() : 0);
+}
+
+- (NSInteger)subscriptionRenewTime {
+    return self.accountDetails ? self.accountDetails->getSubscriptionRenewTime() : 0;
+}
+
+- (NSString *)subscriptionMethod {
+    return self.accountDetails ? [[NSString alloc] initWithUTF8String:self.accountDetails->getSubscriptionMethod()] : nil;
+}
+
+- (NSString *)subscriptionCycle {
+    return self.accountDetails ? [[NSString alloc] initWithUTF8String:self.accountDetails->getSubscriptionCycle()] : nil;
+}
+
+- (NSInteger)numberUsageItems {
+    return self.accountDetails ? self.accountDetails->getNumUsageItems() : 0;
 }
 
 - (NSNumber *)storageUsedForHandle:(uint64_t)handle {

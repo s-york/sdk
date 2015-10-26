@@ -38,6 +38,8 @@ struct MEGA_API AccountSession
     string ip;
     char country[3];
     int current;
+    handle id;
+    int alive; 
 };
 
 struct MEGA_API AccountPurchase
@@ -73,6 +75,9 @@ struct MEGA_API AccountDetails
     // subscription information (summarized)
     int pro_level;
     char subscription_type;
+    char subscription_cycle[4];
+    m_time_t subscription_renew;
+    string subscription_method;
 
     m_time_t pro_until;
 

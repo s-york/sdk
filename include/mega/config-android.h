@@ -1,6 +1,9 @@
 /* include/mega/config.h.  Generated from config.h.in by configure.  */
 /* include/mega/config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 if you have the <glob.h> header file. */
+#define HAVE_GLOB_H 1
+
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #define HAVE_ARPA_INET_H 1
 
@@ -115,7 +118,7 @@
 #define MEGA_MICRO_VERSION 0
 
 /* MEGA SDK minor version. */
-#define MEGA_MINOR_VERSION 5
+#define MEGA_MINOR_VERSION 6
 
 /* Name of package */
 #define PACKAGE "libmega"
@@ -149,8 +152,6 @@
 
 /* Define to use libcrypto++ */
 #define USE_CRYPTOPP 1
-
-#define USE_SODIUM 1
 
 /* Define to use Berkeley DB */
 #define USE_DB 0

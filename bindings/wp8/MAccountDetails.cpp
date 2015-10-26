@@ -21,6 +21,11 @@
 
 #include "MAccountDetails.h"
 
+#include "MAccountBalance.h"
+#include "MAccountPurchase.h"
+#include "MAccountSession.h"
+#include "MAccountTransaction.h"
+
 using namespace mega;
 using namespace Platform;
 
@@ -41,19 +46,56 @@ MegaAccountDetails* MAccountDetails::getCPtr()
 	return accountDetails;
 }
 
-uint64 MAccountDetails::getStorageUsed() 
+MAccountType MAccountDetails::getProLevel()
 {
-	return accountDetails ? accountDetails->getStorageUsed() : 0;
+	return (MAccountType)(accountDetails ? accountDetails->getProLevel() : 0);
 }
 
-uint64 MAccountDetails::getStorageMax() 
+int64 MAccountDetails::getProExpiration()
+{
+	return accountDetails ? accountDetails->getProExpiration() : 0;
+}
+
+MSubscriptionStatus MAccountDetails::getSubscriptionStatus()
+{
+	return (MSubscriptionStatus)(accountDetails ? accountDetails->getSubscriptionStatus() : 0);
+}
+
+int64 MAccountDetails::getSubscriptionRenewTime()
+{
+	return accountDetails ? accountDetails->getSubscriptionRenewTime() : 0;
+}
+
+String^ MAccountDetails::getSubscriptionMethod()
+{
+	if (!accountDetails) return nullptr;
+
+	std::string utf16subscriptionMethod;
+	const char *utf8subscriptionMethod = accountDetails->getSubscriptionMethod();
+	MegaApi::utf8ToUtf16(utf8subscriptionMethod, &utf16subscriptionMethod);
+
+	return utf8subscriptionMethod ? ref new String((wchar_t *)utf16subscriptionMethod.data()) : nullptr;
+}
+
+String^ MAccountDetails::getSubscriptionCycle()
+{
+	if (!accountDetails) return nullptr;
+
+	std::string utf16subscriptionCycle;
+	const char *utf8subscriptionCycle = accountDetails->getSubscriptionCycle();
+	MegaApi::utf8ToUtf16(utf8subscriptionCycle, &utf16subscriptionCycle);
+
+	return utf8subscriptionCycle ? ref new String((wchar_t *)utf16subscriptionCycle.data()) : nullptr;
+}
+
+uint64 MAccountDetails::getStorageMax()
 {
 	return accountDetails ? accountDetails->getStorageMax() : 0;
 }
 
-uint64 MAccountDetails::getTransferOwnUsed()
+uint64 MAccountDetails::getStorageUsed() 
 {
-	return accountDetails ? accountDetails->getTransferOwnUsed() : 0;
+	return accountDetails ? accountDetails->getStorageUsed() : 0;
 }
 
 uint64 MAccountDetails::getTransferMax()
@@ -61,9 +103,14 @@ uint64 MAccountDetails::getTransferMax()
 	return accountDetails ? accountDetails->getTransferMax() : 0;
 }
 
-MAccountType MAccountDetails::getProLevel()
+uint64 MAccountDetails::getTransferOwnUsed()
 {
-	return (MAccountType) (accountDetails ? accountDetails->getProLevel() : 0);
+	return accountDetails ? accountDetails->getTransferOwnUsed() : 0;
+}
+
+int MAccountDetails::getNumUsageItems()
+{
+	return accountDetails ? accountDetails->getNumUsageItems() : 0;
 }
 
 uint64 MAccountDetails::getStorageUsed(uint64 handle)
@@ -79,4 +126,44 @@ uint64 MAccountDetails::getNumFiles(uint64 handle)
 uint64 MAccountDetails::getNumFolders(uint64 handle)
 {
 	return accountDetails ? accountDetails->getNumFolders(handle) : 0;
+}
+
+int MAccountDetails::getNumBalances()
+{
+    return accountDetails ? accountDetails->getNumBalances() : 0;
+}
+
+MAccountBalance^ MAccountDetails::getBalance(int i)
+{
+    return accountDetails ? ref new MAccountBalance(accountDetails->getBalance(i), true) : nullptr;
+}
+
+int MAccountDetails::getNumSessions()
+{
+    return accountDetails ? accountDetails->getNumSessions() : 0;
+}
+
+MAccountSession^ MAccountDetails::getSession(int i)
+{
+    return accountDetails ? ref new MAccountSession(accountDetails->getSession(i), true) : nullptr;
+}
+
+int MAccountDetails::getNumPurchases()
+{
+    return accountDetails ? accountDetails->getNumPurchases() : 0;
+}
+
+MAccountPurchase^ MAccountDetails::getPurchase(int i)
+{
+    return accountDetails ? ref new MAccountPurchase(accountDetails->getPurchase(i), true) : nullptr;
+}
+
+int MAccountDetails::getNumTransactions()
+{
+    return accountDetails ? accountDetails->getNumTransactions() : 0;
+}
+
+MAccountTransaction^ MAccountDetails::getTransaction(int i)
+{
+    return accountDetails ? ref new MAccountTransaction(accountDetails->getTransaction(i), true) : nullptr;
 }

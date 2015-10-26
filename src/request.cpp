@@ -21,6 +21,7 @@
 
 #include "mega/request.h"
 #include "mega/command.h"
+#include "mega/logging.h"
 
 namespace mega {
 void Request::add(Command* c)
@@ -50,7 +51,10 @@ void Request::get(string* req) const
 
 void Request::procresult(MegaClient* client)
 {
-    client->json.enterarray();
+    if (!client->json.enterarray())
+    {
+        LOG_err << "Invalid response from server";
+    }
 
     for (int i = 0; i < (int)cmds.size(); i++)
     {
@@ -61,29 +65,110 @@ void Request::procresult(MegaClient* client)
         if (client->json.enterobject())
         {
             cmds[i]->procresult();
-            client->json.leaveobject();
+
+            if (!client->json.leaveobject())
+            {
+                LOG_err << "Invalid object";
+            }
         }
         else if (client->json.enterarray())
         {
             cmds[i]->procresult();
-            client->json.leavearray();
+
+            if (!client->json.leavearray())
+            {
+                LOG_err << "Invalid array";
+            }
         }
         else
         {
             cmds[i]->procresult();
         }
 
+        if(!cmds.size())
+        {
+            return;
+        }
+    }
+
+    clear();
+}
+
+void Request::clear()
+{
+    for (int i = (int)cmds.size(); i--; )
+    {
         if (!cmds[i]->persistent)
         {
             delete cmds[i];
         }
     }
-
     cmds.clear();
 }
 
-void Request::clear()
+RequestDispatcher::RequestDispatcher()
 {
-    cmds.clear();
+    r = 0;
 }
+
+void RequestDispatcher::nextRequest()
+{
+    r ^= 1;
+
+    while(!reqbuf.empty() && reqs[r].cmdspending() < MAX_COMMANDS)
+    {
+        Command *c = reqbuf.front();
+        reqbuf.pop();
+        reqs[r].add(c);
+        LOG_debug << "Command extracted from secondary buffer: " << reqbuf.size();
+    }
+}
+
+void RequestDispatcher::add(Command *c)
+{
+    if(reqs[r].cmdspending() < MAX_COMMANDS)
+    {
+        reqs[r].add(c);
+    }
+    else
+    {
+        reqbuf.push(c);
+        LOG_debug << "Command added to secondary buffer: " << reqbuf.size();
+    }
+}
+
+int RequestDispatcher::cmdspending() const
+{
+    return reqs[r].cmdspending();
+}
+
+void RequestDispatcher::get(string *out) const
+{
+    reqs[r].get(out);
+}
+
+void RequestDispatcher::procresult(MegaClient *client)
+{
+    reqs[r ^ 1].procresult(client);
+}
+
+void RequestDispatcher::clear()
+{
+    for (int i = sizeof(reqs)/sizeof(*reqs); i--; )
+    {
+        reqs[i].clear();
+    }
+
+    while (!reqbuf.empty())
+    {
+        Command *c = reqbuf.front();
+        reqbuf.pop();
+
+        if (!c->persistent)
+        {
+            delete c;
+        }
+    }
+}
+
 } // namespace

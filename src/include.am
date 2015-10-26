@@ -54,8 +54,11 @@ src_libmega_la_SOURCES += src/waiterbase.cpp
 src_libmega_la_SOURCES += src/proxy.cpp
 src_libmega_la_SOURCES += src/crypto/cryptopp.cpp
 src_libmega_la_SOURCES += src/db/sqlite.cpp
-src_libmega_la_SOURCES += third_party/utf8proc/utf8proc.cpp
+src_libmega_la_SOURCES += src/mega_utf8proc.cpp
 src_libmega_la_SOURCES += src/gfx/external.cpp
+src_libmega_la_SOURCES += src/pendingcontactrequest.cpp
+
+EXTRA_DIST = src/mega_utf8proc_data.c
 
 if BUILD_MEGAAPI
 src_libmega_la_SOURCES += src/megaapi_impl.cpp
@@ -77,8 +80,6 @@ src_libmega_la_SOURCES+= src/win32/console.cpp
 src_libmega_la_SOURCES+= src/win32/net.cpp
 src_libmega_la_SOURCES+= src/win32/waiter.cpp
 src_libmega_la_SOURCES+= src/win32/consolewaiter.cpp
-# need to find a better way to specify sqlite path
-src_libmega_la_SOURCES+= ../sqlite3/sqlite3.c
 
 # posix sources
 else

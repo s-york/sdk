@@ -37,6 +37,15 @@ struct MEGA_API MegaApp
     // login result
     virtual void login_result(error) { }
 
+    // logout result
+    virtual void logout_result(error) { }
+
+    // user data result
+    virtual void userdata_result(string*, string*, string*, handle, error) { }
+
+    // user public key retrieval result
+    virtual void pubkey_result(User *) { }
+
     // ephemeral session creation/resumption result
     virtual void ephemeral_result(error) { }
     virtual void ephemeral_result(handle, const byte*) { }
@@ -54,6 +63,9 @@ struct MEGA_API MegaApp
     virtual void account_details(AccountDetails*, bool, bool, bool, bool, bool, bool) { }
     virtual void account_details(AccountDetails*, error) { }
 
+    // sessionid is undef if all sessions except the current were killed
+    virtual void sessions_killed(handle sessionid, error e) { }
+
     // node attribute update failed (not invoked unless error != API_OK)
     virtual void setattr_result(handle, error) { }
 
@@ -66,8 +78,14 @@ struct MEGA_API MegaApp
     // nodes have been updated
     virtual void nodes_updated(Node**, int) { }
 
+    // nodes have been updated
+    virtual void pcrs_updated(PendingContactRequest**, int) { }
+
     // users have been added or updated
     virtual void users_updated(User**, int) { }
+
+    // the account has been modified (upgraded/downgraded)
+    virtual void account_updated() { }
 
     // password change result
     virtual void changepw_result(error) { }
@@ -88,9 +106,14 @@ struct MEGA_API MegaApp
     virtual void share_result(error) { }
     virtual void share_result(int, error) { }
 
+    // outgoing pending contact result
+    virtual void setpcr_result(handle, error, opcactions_t) { }
+    // incoming pending contact result
+    virtual void updatepcr_result(error, ipcactions_t) { }
+
     // file attribute fetch result
     virtual void fa_complete(Node*, fatype, const char*, uint32_t) { }
-    virtual int fa_failed(handle, fatype, int)
+    virtual int fa_failed(handle, fatype, int, error)
     {
         return 0;
     }
@@ -100,11 +123,18 @@ struct MEGA_API MegaApp
     virtual void putfa_result(handle, fatype, const char*) { }
 
     // purchase transactions
-    virtual void enumeratequotaitems_result(handle, unsigned, unsigned, unsigned, unsigned, unsigned, const char*) { }
+    virtual void enumeratequotaitems_result(handle, unsigned, unsigned, unsigned, unsigned, unsigned, const char*, const char*, const char*, const char*) { }
     virtual void enumeratequotaitems_result(error) { }
     virtual void additem_result(error) { }
-    virtual void checkout_result(error) { }
-    virtual void checkout_result(const char*) { }
+    virtual void checkout_result(const char*, error) { }
+    virtual void submitpurchasereceipt_result(error) { }
+    virtual void creditcardstore_result(error) { }
+    virtual void creditcardquerysubscriptions_result(int, error) {}
+    virtual void creditcardcancelsubscriptions_result(error) {}
+    virtual void getpaymentmethods_result(int, error) {}
+    virtual void copysession_result(string*, error) { }
+    virtual void userfeedbackstore_result(error) { }
+    virtual void sendevent_result(error) { }
 
     // user invites/attributes
     virtual void invite_result(error) { }
@@ -131,6 +161,9 @@ struct MEGA_API MegaApp
     // event reporting result
     virtual void reportevent_result(error) { }
 
+    // clean rubbish bin result
+    virtual void cleanrubbishbin_result(error) { }
+
     // global transfer queue updates (separate signaling towards the queued objects)
     virtual void transfer_added(Transfer*) { }
     virtual void transfer_removed(Transfer*) { }
@@ -143,21 +176,22 @@ struct MEGA_API MegaApp
     // sync status updates and events
     virtual void syncupdate_state(Sync*, syncstate_t) { }
     virtual void syncupdate_scanning(bool) { }
-    virtual void syncupdate_local_folder_addition(Sync*, const char*) { }
-    virtual void syncupdate_local_folder_deletion(Sync*, const char*) { }
-    virtual void syncupdate_local_file_addition(Sync*, const char*) { }
-    virtual void syncupdate_local_file_deletion(Sync*, const char*) { }
-    virtual void syncupdate_local_file_change(Sync*, const char*) { }
-    virtual void syncupdate_local_move(Sync*, const char*, const char*) { }
+    virtual void syncupdate_local_folder_addition(Sync*, LocalNode*, const char*) { }
+    virtual void syncupdate_local_folder_deletion(Sync*, LocalNode*) { }
+    virtual void syncupdate_local_file_addition(Sync*, LocalNode*, const char*) { }
+    virtual void syncupdate_local_file_deletion(Sync*, LocalNode*) { }
+    virtual void syncupdate_local_file_change(Sync*, LocalNode*, const char*) { }
+    virtual void syncupdate_local_move(Sync*, LocalNode*, const char*) { }
     virtual void syncupdate_local_lockretry(bool) { }
-    virtual void syncupdate_get(Sync*, const char*) { }
-    virtual void syncupdate_put(Sync*, const char*) { }
-    virtual void syncupdate_remote_file_addition(Node*) { }
-    virtual void syncupdate_remote_file_deletion(Node*) { }
-    virtual void syncupdate_remote_folder_addition(Node*) { }
-    virtual void syncupdate_remote_folder_deletion(Node*) { }
+    virtual void syncupdate_get(Sync*, Node*, const char*) { }
+    virtual void syncupdate_put(Sync*, LocalNode*, const char*) { }
+    virtual void syncupdate_remote_file_addition(Sync*, Node*) { }
+    virtual void syncupdate_remote_file_deletion(Sync*, Node*) { }
+    virtual void syncupdate_remote_folder_addition(Sync*, Node*) { }
+    virtual void syncupdate_remote_folder_deletion(Sync*, Node*) { }
     virtual void syncupdate_remote_copy(Sync*, const char*) { }
-    virtual void syncupdate_remote_move(string*, string*) { }
+    virtual void syncupdate_remote_move(Sync*, Node*, Node*) { }
+    virtual void syncupdate_remote_rename(Sync*, Node*, const char*) { }
     virtual void syncupdate_treestate(LocalNode*) { }
 
     // sync filename filter
@@ -179,6 +213,8 @@ struct MEGA_API MegaApp
 
     // failed request retry notification
     virtual void notify_retry(dstime) { }
+
+    virtual void loadbalancing_result(string*, error) { }
 
     virtual ~MegaApp() { }
 };

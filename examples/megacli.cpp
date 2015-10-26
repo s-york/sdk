@@ -26,6 +26,7 @@
 #define PREFER_STDARG
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <iomanip>
 
 using namespace mega;
 
@@ -126,7 +127,7 @@ void AppFileGet::start()
 // returns true to effect a retry, false to effect a failure
 bool AppFile::failed(error e)
 {
-    return e != API_EKEY && e != API_EBLOCKED && transfer->failcount < 10;
+    return e != API_EKEY && e != API_EBLOCKED && e != API_EOVERQUOTA && transfer->failcount < 10;
 }
 
 // transfer completion
@@ -275,39 +276,39 @@ void DemoApp::syncupdate_scanning(bool active)
 }
 
 // sync update callbacks are for informational purposes only and must not change or delete the sync itself
-void DemoApp::syncupdate_local_folder_addition(Sync* sync, const char* path)
+void DemoApp::syncupdate_local_folder_addition(Sync* sync, LocalNode *, const char* path)
 {
     cout << "Sync - local folder addition detected: " << path;
     syncstat(sync);
 }
 
-void DemoApp::syncupdate_local_folder_deletion(Sync* sync, const char* path)
+void DemoApp::syncupdate_local_folder_deletion(Sync* sync, LocalNode *localNode)
 {
-    cout << "Sync - local folder deletion detected: " << path;
+    cout << "Sync - local folder deletion detected: " << localNode->name;
     syncstat(sync);
 }
 
-void DemoApp::syncupdate_local_file_addition(Sync* sync, const char* path)
+void DemoApp::syncupdate_local_file_addition(Sync* sync, LocalNode *, const char* path)
 {
     cout << "Sync - local file addition detected: " << path;
     syncstat(sync);
 }
 
-void DemoApp::syncupdate_local_file_deletion(Sync* sync, const char* path)
+void DemoApp::syncupdate_local_file_deletion(Sync* sync, LocalNode *localNode)
 {
-    cout << "Sync - local file deletion detected: " << path;
+    cout << "Sync - local file deletion detected: " << localNode->name;
     syncstat(sync);
 }
 
-void DemoApp::syncupdate_local_file_change(Sync* sync, const char* path)
+void DemoApp::syncupdate_local_file_change(Sync* sync, LocalNode *, const char* path)
 {
     cout << "Sync - local file change detected: " << path;
     syncstat(sync);
 }
 
-void DemoApp::syncupdate_local_move(Sync*, const char* from, const char* to)
+void DemoApp::syncupdate_local_move(Sync*, LocalNode *localNode, const char* path)
 {
-    cout << "Sync - local rename/move " << from << " -> " << to << endl;
+    cout << "Sync - local rename/move " << localNode->name << " -> " << path << endl;
 }
 
 void DemoApp::syncupdate_local_lockretry(bool locked)
@@ -322,37 +323,43 @@ void DemoApp::syncupdate_local_lockretry(bool locked)
     }
 }
 
-void DemoApp::syncupdate_remote_move(string* from, string* to)
+void DemoApp::syncupdate_remote_move(Sync *, Node *n, Node *prevparent)
 {
-    cout << "Sync - remote rename/move " << *from << " -> " << *to << endl;
+    cout << "Sync - remote move " << n->displayname() << ": " << (prevparent ? prevparent->displayname() : "?") <<
+            " -> " << (n->parent ? n->parent->displayname() : "?") << endl;
 }
 
-void DemoApp::syncupdate_remote_folder_addition(Node* n)
+void DemoApp::syncupdate_remote_rename(Sync *, Node *n, const char *prevname)
+{
+    cout << "Sync - remote rename " << prevname << " -> " <<  n->displayname() << endl;
+}
+
+void DemoApp::syncupdate_remote_folder_addition(Sync *, Node* n)
 {
     cout << "Sync - remote folder addition detected " << n->displayname() << endl;
 }
 
-void DemoApp::syncupdate_remote_file_addition(Node* n)
+void DemoApp::syncupdate_remote_file_addition(Sync *, Node* n)
 {
     cout << "Sync - remote file addition detected " << n->displayname() << endl;
 }
 
-void DemoApp::syncupdate_remote_folder_deletion(Node* n)
+void DemoApp::syncupdate_remote_folder_deletion(Sync *, Node* n)
 {
     cout << "Sync - remote folder deletion detected " << n->displayname() << endl;
 }
 
-void DemoApp::syncupdate_remote_file_deletion(Node* n)
+void DemoApp::syncupdate_remote_file_deletion(Sync *, Node* n)
 {
     cout << "Sync - remote file deletion detected " << n->displayname() << endl;
 }
 
-void DemoApp::syncupdate_get(Sync*, const char* path)
+void DemoApp::syncupdate_get(Sync*, Node *, const char* path)
 {
     cout << "Sync - requesting file " << path << endl;
 }
 
-void DemoApp::syncupdate_put(Sync*, const char* path)
+void DemoApp::syncupdate_put(Sync*, LocalNode *, const char* path)
 {
     cout << "Sync - sending file " << path << endl;
 }
@@ -471,6 +478,50 @@ void DemoApp::users_updated(User** u, int count)
     }
 }
 
+void DemoApp::pcrs_updated(PendingContactRequest** list, int count)
+{
+    int deletecount = 0;
+    int updatecount = 0;
+    if (list != NULL)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            if (list[i]->changed.deleted)
+            {
+                deletecount++; 
+            } 
+            else
+            {
+                updatecount++;
+            }
+        }
+    } 
+    else
+    {
+        // All pcrs are updated
+        for (handlepcr_map::iterator it = client->pcrindex.begin(); it != client->pcrindex.end(); it++)
+        {
+            if (it->second->changed.deleted)
+            {
+                deletecount++; 
+            } 
+            else
+            {
+                updatecount++;
+            }
+        }
+    }
+
+    if (deletecount != 0)
+    {
+        cout << deletecount << " pending contact request" << (deletecount != 1 ? "s" : "") << " deleted" << endl;
+    }
+    if (updatecount != 0)
+    {
+        cout << updatecount << " pending contact request" << (updatecount != 1 ? "s" : "") << " received or updated" << endl;
+    }
+}
+
 void DemoApp::setattr_result(handle, error e)
 {
     if (e)
@@ -541,14 +592,49 @@ void DemoApp::share_result(int, error e)
     }
 }
 
+void DemoApp::setpcr_result(handle h, error e, opcactions_t action)
+{
+    if (e)
+    {
+        cout << "Outgoing pending contact request failed (" << errorstring(e) << ")" << endl;
+    }
+    else
+    {
+        if (h == UNDEF)
+        {
+            // must have been deleted
+            cout << "Outgoing pending contact request " << (action == OPCA_DELETE ? "deleted" : "reminded") << " successfully" << endl;
+        } 
+        else
+        {
+            char buffer[12];
+            Base64::btoa((byte*)&h, sizeof(h), buffer);
+            cout << "Outgoing pending contact request succeeded, id: " << buffer << endl;
+        }
+    }
+}
+
+void DemoApp::updatepcr_result(error e, ipcactions_t action)
+{
+    if (e)
+    {
+        cout << "Incoming pending contact request update failed (" << errorstring(e) << ")" << endl;
+    }
+    else
+    {
+        string labels[3] = {"accepted", "denied", "ignored"};
+        cout << "Incoming pending contact request successfully " << labels[(int)action] << endl;
+    }
+}
+
 void DemoApp::fa_complete(Node* n, fatype type, const char* data, uint32_t len)
 {
     cout << "Got attribute of type " << type << " (" << len << " byte(s)) for " << n->displayname() << endl;
 }
 
-int DemoApp::fa_failed(handle, fatype type, int retries)
+int DemoApp::fa_failed(handle, fatype type, int retries, error e)
 {
-    cout << "File attribute retrieval of type " << type << " failed (retries: " << retries << ")" << endl;
+    cout << "File attribute retrieval of type " << type << " failed (retries: " << retries << ") error: " << e << endl;
 
     return retries > 2;
 }
@@ -808,11 +894,6 @@ static Node* nodebypath(const char* ptr, string* user = NULL, string* namepart =
                         break;
                     }
                 }
-
-                if (l)
-                {
-                    break;
-                }
             }
         }
 
@@ -951,6 +1032,20 @@ static void dumptree(Node* n, int recurse, int depth = 0, const char* title = NU
                 {
                     cout << ", has attributes " << p + 1;
                 }
+
+                if (n->plink)
+                {
+                    cout << ", shared as exported";
+                    if (n->plink->ets)
+                    {
+                        cout << " temporal";
+                    }
+                    else
+                    {
+                        cout << " permanent";
+                    }
+                    cout << " file link";
+                }
                 break;
 
             case FOLDERNODE:
@@ -965,10 +1060,32 @@ static void dumptree(Node* n, int recurse, int depth = 0, const char* title = NU
                             cout << ", shared with " << it->second->user->email << ", access "
                                  << accesslevels[it->second->access];
                         }
+                    }
+
+                    if (n->plink)
+                    {
+                        cout << ", shared as exported";
+                        if (n->plink->ets)
+                        {
+                            cout << " temporal";
+                        }
                         else
                         {
-                            cout << ", shared as exported folder link";
+                            cout << " permanent";
                         }
+                        cout << " folder link";
+                    }
+                }
+
+                if (n->pendingshares)
+                {
+                    for (share_map::iterator it = n->pendingshares->begin(); it != n->pendingshares->end(); it++)
+                    {
+                        if (it->first)
+                        {
+                            cout << ", shared (still pending) with " << it->second->pcr->targetemail << ", access "
+                                 << accesslevels[it->second->access];
+                        }                        
                     }
                 }
 
@@ -1437,19 +1554,23 @@ static void process_line(char* l)
 #ifdef ENABLE_SYNC
                 cout << "      sync [localpath dstremotepath|cancelslot]" << endl;
 #endif
-                cout << "      export remotepath [del]" << endl;
-                cout << "      share [remotepath [dstemail [r|rw|full]]]" << endl;
-                cout << "      invite dstemail [del]" << endl;
+                cout << "      export remotepath [expireTime|del]" << endl;
+                cout << "      share [remotepath [dstemail [r|rw|full] [origemail]]]" << endl;
+                cout << "      invite dstemail [origemail|del|rmd]" << endl;
+                cout << "      ipc handle a|d|i" << endl;
+                cout << "      showpcr" << endl;
                 cout << "      users" << endl;
                 cout << "      getua attrname [email|private]" << endl;
                 cout << "      putua attrname [del|set string|load file] [private]" << endl;
                 cout << "      putbps [limit|auto|none]" << endl;
+                cout << "      killsession [all|sessionid]" << endl;
                 cout << "      whoami" << endl;
                 cout << "      passwd" << endl;
                 cout << "      retry" << endl;
                 cout << "      recon" << endl;
                 cout << "      reload" << endl;
                 cout << "      logout" << endl;
+                cout << "      locallogout" << endl;
                 cout << "      symlink" << endl;
                 cout << "      version" << endl;
                 cout << "      debug" << endl;
@@ -1980,6 +2101,39 @@ static void process_line(char* l)
 
                         return;
                     }
+                    else if (words[0] == "ipc")
+                    {
+                        // incoming pending contact action
+                        handle phandle;
+                        if (words.size() == 3 && Base64::atob(words[1].c_str(), (byte*) &phandle, sizeof phandle) == sizeof phandle)
+                        {
+                            ipcactions_t action;
+                            if (words[2] == "a")
+                            {
+                                action = IPCA_ACCEPT;
+                            }
+                            else if (words[2] == "d")
+                            {
+                                action = IPCA_DENY;
+                            }
+                            else if (words[2] == "i")
+                            {
+                                action = IPCA_IGNORE;
+                            }
+                            else
+                            {
+                                cout << "      ipc handle a|d|i" << endl;
+                                return;
+                            }
+
+                            client->updatepcr(phandle, action);
+                        }
+                        else
+                        {
+                            cout << "      ipc handle a|d|i" << endl;
+                        }
+                        return;
+                    }
                     break;
 
                 case 4:
@@ -2231,9 +2385,10 @@ static void process_line(char* l)
                                 }
                                 break;
 
-                            case 2:		// list all outgoing shares on this path
-                            case 3:		// remove outgoing share to specified e-mail address
-                            case 4:		// add outgoing share to specified e-mail address
+                            case 2:	    // list all outgoing shares on this path
+                            case 3:	    // remove outgoing share to specified e-mail address
+                            case 4:	    // add outgoing share to specified e-mail address
+                            case 5:     // user specified a personal representation to appear as for the invitation
                                 if ((n = nodebypath(words[1].c_str())))
                                 {
                                     if (words.size() == 2)
@@ -2243,7 +2398,7 @@ static void process_line(char* l)
                                     else
                                     {
                                         accesslevel_t a = ACCESS_UNKNOWN;
-
+                                        const char* personal_representation = NULL;
                                         if (words.size() > 3)
                                         {
                                             if (words[3] == "r" || words[3] == "ro")
@@ -2264,9 +2419,14 @@ static void process_line(char* l)
 
                                                 return;
                                             }
+
+                                            if (words.size() > 4)
+                                            {
+                                                personal_representation = words[4].c_str();
+                                            }
                                         }
 
-                                        client->setshare(n, words[2].c_str(), a);
+                                        client->setshare(n, words[2].c_str(), a, personal_representation);
                                     }
                                 }
                                 else
@@ -2277,7 +2437,7 @@ static void process_line(char* l)
                                 break;
 
                             default:
-                                cout << "      share [remotepath [dstemail [r|rw|full]]]" << endl;
+                                cout << "      share [remotepath [dstemail [r|rw|full] [origemail]]]" << endl;
                         }
 
                         return;
@@ -2707,20 +2867,31 @@ static void process_line(char* l)
                     }
                     else if (words[0] == "invite")
                     {
-                        int del = words.size() == 3 && words[2] == "del";
-
-                        if (words.size() == 2 || del)
+                        if (client->finduser(client->me)->email.compare(words[1]))
                         {
-                            error e;
-
-                            if ((e = client->invite(words[1].c_str(), del ? HIDDEN : VISIBLE)))
+                            int del = words.size() == 3 && words[2] == "del";
+                            int rmd = words.size() == 3 && words[2] == "rmd";
+                            if (words.size() == 2 || words.size() == 3)
                             {
-                                cout << "Invitation failed: " << errorstring(e) << endl;
+                                if (del || rmd)
+                                {
+                                    client->setpcr(words[1].c_str(), del ? OPCA_DELETE : OPCA_REMIND);
+                                }
+                                else
+                                {
+                                    // Original email is not required, but can be used if this account has multiple email addresses associated,
+                                    // to have the invite come from a specific email
+                                    client->setpcr(words[1].c_str(), OPCA_ADD, "Invite from MEGAcli", words.size() == 3 ? words[2].c_str() : NULL);
+                                }
+                            }
+                            else
+                            {
+                                cout << "      invite dstemail [origemail|del|rmd]" << endl;
                             }
                         }
                         else
                         {
-                            cout << "      invite dstemail [del]" << endl;
+                            cout << "Cannot send invitation to your own user" << endl;
                         }
 
                         return;
@@ -2808,18 +2979,26 @@ static void process_line(char* l)
                         if (words.size() > 1)
                         {
                             Node* n;
+                            int del = 0;
+                            int ets = 0;
 
                             if ((n = nodebypath(words[1].c_str())))
                             {
-                                error e;
+                                if (words.size() > 2)
+                                {
+                                    del = (words[2] == "del");
+                                    if (!del)
+                                    {
+                                        ets = atol(words[2].c_str());
+                                    }
+                                }
 
-                                if ((e = client->exportnode(n, words.size() > 2 && words[2] == "del")))
+                                cout << "Exporting..." << endl;
+
+                                error e;
+                                if ((e = client->exportnode(n, del, ets)))
                                 {
                                     cout << words[1] << ": Export rejected (" << errorstring(e) << ")" << endl;
-                                }
-                                else
-                                {
-                                    cout << "Exporting..." << endl;
                                 }
                             }
                             else
@@ -2829,7 +3008,7 @@ static void process_line(char* l)
                         }
                         else
                         {
-                            cout << "      export remotepath [del]" << endl;
+                            cout << "      export remotepath [expireTime|del]" << endl;
                         }
 
                         return;
@@ -2973,6 +3152,91 @@ static void process_line(char* l)
 
 
                         cwd = UNDEF;
+
+                        return;
+                    } 
+                    else if (words[0] == "showpcr")
+                    {
+                        string outgoing = "";
+                        string incoming = "";
+                        for (handlepcr_map::iterator it = client->pcrindex.begin(); it != client->pcrindex.end(); it++)
+                        {
+                            if (it->second->isoutgoing)
+                            {
+                                ostringstream os;
+                                os << setw(34) << it->second->targetemail;
+
+                                char buffer[12];
+                                int size = Base64::btoa((byte*)&(it->second->id), sizeof(it->second->id), buffer);
+                                os << "\t(id: ";
+                                os << buffer;
+                                
+                                os << ", ts: ";
+                                
+                                os << it->second->ts;                                
+
+                                outgoing.append(os.str());
+                                outgoing.append(")\n");
+                            }
+                            else
+                            {
+                                ostringstream os;
+                                os << setw(34) << it->second->originatoremail;
+
+                                char buffer[12];
+                                int size = Base64::btoa((byte*)&(it->second->id), sizeof(it->second->id), buffer);
+                                os << "\t(id: ";
+                                os << buffer;
+                                
+                                os << ", ts: ";
+                                
+                                os << it->second->ts;                                
+
+                                incoming.append(os.str());
+                                incoming.append(")\n");
+                            }
+                        }
+                        cout << "Incoming PCRs:" << endl << incoming << endl;
+                        cout << "Outgoing PCRs:" << endl << outgoing << endl;
+                        return;
+                    }
+                    break;
+
+                case 11:                    
+                    if (words[0] == "killsession")
+                    {
+                        if (words.size() == 2)
+                        {
+                            if (words[1] == "all")
+                            {
+                                // Kill all sessions (except current)
+                                client->killallsessions();
+                            }
+                            else
+                            {
+                                handle sessionid;
+                                if (Base64::atob(words[1].c_str(), (byte*) &sessionid, sizeof sessionid) == sizeof sessionid)
+                                {                                    
+                                    client->killsession(sessionid);
+                                }
+                                else
+                                {
+                                    cout << "invalid session id provided" << endl;
+                                }                         
+                            }
+                        }
+                        else
+                        {
+                            cout << "      killsession [all|sessionid] " << endl;
+                        }
+                        return;
+                    }
+                    else if (words[0] == "locallogout")
+                    {
+                        cout << "Logging off locally..." << endl;
+
+                        cwd = UNDEF;
+                        client->locallogout();
 
                         return;
                     }
@@ -3441,16 +3705,41 @@ void DemoApp::account_details(AccountDetails* ad, bool storage, bool transfer, b
 
     if (sessions)
     {
-        cout << "Session history:" << endl;
-
+        cout << "Currently Active Sessions:" << endl;
         for (vector<AccountSession>::iterator it = ad->sessions.begin(); it != ad->sessions.end(); it++)
         {
-            time_t ts = it->timestamp;
-            strftime(timebuf, sizeof timebuf, "%c", localtime(&ts));
-            ts = it->mru;
-            strftime(timebuf2, sizeof timebuf, "%c", localtime(&ts));
-            printf("\tSession start: %s Most recent activity: %s IP: %s Country: %.2s User-Agent: %s\n",
-                    timebuf, timebuf2, it->ip.c_str(), it->country, it->useragent.c_str());
+            if (it->alive)
+            {
+                time_t ts = it->timestamp;
+                strftime(timebuf, sizeof timebuf, "%c", localtime(&ts));
+                ts = it->mru;
+                strftime(timebuf2, sizeof timebuf, "%c", localtime(&ts));
+
+                char id[12];
+                Base64::btoa((byte*)&(it->id), sizeof(it->id), id);
+
+                if (it->current)
+                {
+                    printf("\t* Current Session\n");
+                }
+                printf("\tSession ID: %s\n\tSession start: %s\n\tMost recent activity: %s\n\tIP: %s\n\tCountry: %.2s\n\tUser-Agent: %s\n\t-----\n",
+                        id, timebuf, timebuf2, it->ip.c_str(), it->country, it->useragent.c_str());
+            }
+        }
+
+        if(client->debugstate())
+        {
+            cout << endl << "Full Session history:" << endl;
+
+            for (vector<AccountSession>::iterator it = ad->sessions.begin(); it != ad->sessions.end(); it++)
+            {
+                time_t ts = it->timestamp;
+                strftime(timebuf, sizeof timebuf, "%c", localtime(&ts));
+                ts = it->mru;
+                strftime(timebuf2, sizeof timebuf, "%c", localtime(&ts));
+                printf("\tSession start: %s\n\tMost recent activity: %s\n\tIP: %s\n\tCountry: %.2s\n\tUser-Agent: %s\n\t-----\n",
+                        timebuf, timebuf2, it->ip.c_str(), it->country, it->useragent.c_str());
+            }
         }
     }
 }
@@ -3463,6 +3752,28 @@ void DemoApp::account_details(AccountDetails* ad, error e)
         cout << "Account details retrieval failed (" << errorstring(e) << ")" << endl;
     }
 }
+
+// account details could not be retrieved
+void DemoApp::sessions_killed(handle sessionid, error e)
+{
+    if (e)
+    {
+        cout << "Session killing failed (" << errorstring(e) << ")" << endl;
+        return;
+    }
+
+    if (sessionid == UNDEF)
+    {
+        cout << "All sessions except current have been killed" << endl;
+    }
+    else
+    {
+        char id[12];
+        int size = Base64::btoa((byte*)&(sessionid), sizeof(sessionid), id);
+        cout << "Session with id " << id << " has been killed" << endl;
+    }
+}
+
 
 // user attribute update notification
 void DemoApp::userattr_update(User* u, int priv, const char* n)

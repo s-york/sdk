@@ -21,6 +21,7 @@
 
 #include "mega/treeproc.h"
 #include "mega/megaclient.h"
+#include "mega/logging.h"
 
 namespace mega {
 // create share keys
@@ -77,6 +78,19 @@ void TreeProcDel::proc(MegaClient* client, Node* n)
     client->notifynode(n);
 }
 
+void TreeProcApplyKey::proc(MegaClient *client, Node *n)
+{
+    if (n->attrstring)
+    {
+        n->applykey();
+        if (!n->attrstring)
+        {
+            n->changed.attrs = true;
+            client->notifynode(n);
+        }
+    }
+}
+
 #ifdef ENABLE_SYNC
 // stop sync get
 void TreeProcDelSyncGet::proc(MegaClient*, Node* n)
@@ -87,5 +101,40 @@ void TreeProcDelSyncGet::proc(MegaClient*, Node* n)
         n->syncget = NULL;
     }
 }
+
+LocalTreeProcMove::LocalTreeProcMove(Sync* sync, bool recreate)
+{
+    this->newsync = sync;
+    this->recreate = recreate;
+    nc = 0;
+}
+
+void LocalTreeProcMove::proc(MegaClient*, LocalNode* localnode)
+{
+    if (newsync != localnode->sync)
+    {
+        localnode->sync->statecachedel(localnode);
+        localnode->sync = newsync;
+        newsync->statecacheadd(localnode);
+    }
+
+    if (recreate)
+    {
+        localnode->created = false;
+        localnode->node = NULL;
+    }
+
+    nc++;
+}
+
+void LocalTreeProcUpdateTransfers::proc(MegaClient *, LocalNode *localnode)
+{
+    if (localnode->transfer && localnode->transfer->localfilename.size())
+    {
+        LOG_debug << "Updating transfer path";
+        localnode->prepare();
+    }
+}
+
 #endif
 } // namespace

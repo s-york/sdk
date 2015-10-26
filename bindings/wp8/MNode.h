@@ -25,48 +25,71 @@
 
 namespace mega
 {
-	using namespace Windows::Foundation;
-	using Platform::String;
+    using namespace Windows::Foundation;
+    using Platform::String;
 
-	public enum class MNodeType {
-		TYPE_UNKNOWN = -1,
-		TYPE_FILE = 0,
-		TYPE_FOLDER,
-		TYPE_ROOT,
-		TYPE_INCOMING,
-		TYPE_RUBBISH,
-		TYPE_MAIL
-	};
+    public enum class MNodeType {
+        TYPE_UNKNOWN = -1,
+        TYPE_FILE = 0,
+        TYPE_FOLDER,
+        TYPE_ROOT,
+        TYPE_INCOMING,
+        TYPE_RUBBISH
+    };
 
-	public ref class MNode sealed
-	{
-		friend ref class MegaSDK;
-		friend ref class MNodeList;
-		friend ref class MTransfer;
-		friend ref class MRequest;
-		friend class DelegateMTreeProcessor;
+    public enum class MNodeChangeType {
+        CHANGE_TYPE_REMOVED         = 0x01,
+        CHANGE_TYPE_ATTRIBUTES      = 0x02,
+        CHANGE_TYPE_OWNER           = 0x04,
+        CHANGE_TYPE_TIMESTAMP       = 0x08,
+        CHANGE_TYPE_FILE_ATTRIBUTES = 0x10,
+        CHANGE_TYPE_INSHARE         = 0x20,
+        CHANGE_TYPE_OUTSHARE        = 0x40,
+        CHANGE_TYPE_PARENT          = 0x80,
+        CHANGE_TYPE_PENDINGSHARE    = 0x100
+    };
 
-	public:
-		virtual ~MNode();
-		MNode^ copy();
-		MNodeType getType();
-		String^ getName();
-		String^ getBase64Handle();
-		uint64 getSize();
-		uint64 getCreationTime();
-		uint64 getModificationTime();
-		uint64 getHandle();
-		int getTag();
-		bool isFile();
-		bool isFolder();
-		bool isRemoved();
-		bool hasThumbnail();
-		bool hasPreview();
+    public ref class MNode sealed
+    {
+        friend ref class MegaSDK;
+        friend ref class MNodeList;
+        friend ref class MTransfer;
+        friend ref class MRequest;
+        friend class DelegateMTreeProcessor;
 
-	private:
-		MNode(MegaNode *megaNode, bool cMemoryOwn);
-		MegaNode *megaNode;
-		MegaNode *getCPtr();
-		bool cMemoryOwn;
-	};
+    public:
+        virtual ~MNode();
+        MNode^ copy();
+        MNodeType getType();
+        String^ getName();
+        String^ getBase64Handle();
+        uint64 getSize();
+        uint64 getCreationTime();
+        uint64 getModificationTime();
+        uint64 getHandle();
+        uint64 getParentHandle();
+        String^ getBase64Key();
+        int getTag();
+        uint64 getExpirationTime();
+        MegaHandle getPublicHandle();
+        MNode^ getPublicNode();
+        String^ getPublicLink();
+        bool isFile();
+        bool isFolder();
+        bool isRemoved();
+        bool hasChanged(int changeType);
+        int getChanges();
+        bool hasThumbnail();
+        bool hasPreview();
+        bool isPublic();
+        bool isExported();
+        bool isExpired();
+        bool isTakenDown();
+
+    private:
+        MNode(MegaNode *megaNode, bool cMemoryOwn);
+        MegaNode *megaNode;
+        MegaNode *getCPtr();
+        bool cMemoryOwn;
+    };
 }

@@ -39,24 +39,26 @@ class SyncApp : public MegaApp
     void fetchnodes_result(error e);
 
     void request_error(error e);
-    void syncupdate_state(Sync *, syncstate_t);
 
-    void syncupdate_stuck(string*);
-    void syncupdate_local_folder_addition(Sync*, const char*);
-    void syncupdate_local_folder_deletion(Sync*, const char*);
-    void syncupdate_local_file_addition(Sync*, const char*);
-    void syncupdate_local_file_deletion(Sync*, const char*);
-    void syncupdate_local_file_change(Sync*, const char*);
-    void syncupdate_local_move(Sync*, const char*, const char*);
-    void syncupdate_get(Sync*, const char*);
-    void syncupdate_put(Sync*, const char*);
-    void syncupdate_remote_file_addition(Node*);
-    void syncupdate_remote_file_deletion(Node*);
-    void syncupdate_remote_folder_addition(Node*);
-    void syncupdate_remote_folder_deletion(Node*);
+#ifdef ENABLE_SYNC
+    void syncupdate_state(Sync *, syncstate_t);
+    void syncupdate_local_folder_addition(Sync*, LocalNode*, const char *);
+    void syncupdate_local_folder_deletion(Sync*, LocalNode*);
+    void syncupdate_local_file_addition(Sync*, LocalNode*, const char *);
+    void syncupdate_local_file_deletion(Sync*, LocalNode*);
+    void syncupdate_local_file_change(Sync*, LocalNode*, const char *);
+    void syncupdate_local_move(Sync*, LocalNode*, const char*);
+    void syncupdate_get(Sync*, Node*, const char*);
+    void syncupdate_put(Sync*, LocalNode*, const char*);
+    void syncupdate_remote_file_addition(Sync*, Node*);
+    void syncupdate_remote_file_deletion(Sync*, Node*);
+    void syncupdate_remote_folder_addition(Sync*, Node*);
+    void syncupdate_remote_folder_deletion(Sync*, Node*);
     void syncupdate_remote_copy(Sync*, const char*);
-    void syncupdate_remote_move(string*, string*);
+    void syncupdate_remote_move(Sync*, Node*, Node*);
+    void syncupdate_remote_rename(Sync*sync, Node* n, const char* prevname);
     void syncupdate_treestate(LocalNode*);
+#endif
 
     Node* nodebypath(const char* ptr, string* user, string* namepart);
 public:
@@ -198,11 +200,6 @@ Node* SyncApp::nodebypath(const char* ptr, string* user = NULL, string* namepart
                         l = 2;
                         break;
                     }
-                }
-
-                if (l)
-                {
-                    break;
                 }
             }
         }
@@ -351,7 +348,7 @@ void SyncApp::fetchnodes_result(error e)
                     exit(1);
                 }
 
-                LOG_debug << "Sync started !";
+                LOG_info << "Sync started !";
             }
         }
         else
@@ -369,6 +366,7 @@ void SyncApp::request_error(error e)
     exit(1);
 }
 
+#ifdef ENABLE_SYNC
 void SyncApp::syncupdate_state(Sync*, syncstate_t state)
 {
     if (( state == SYNC_CANCELED ) || ( state == SYNC_FAILED ))
@@ -378,90 +376,86 @@ void SyncApp::syncupdate_state(Sync*, syncstate_t state)
     }
     else if (state == SYNC_ACTIVE)
     {
-        LOG_debug << "Sync is now active";
-    }
-}
-
-void SyncApp::syncupdate_stuck(string* reason)
-{
-    if (reason)
-    {
-        LOG_debug << "Sync halted: " << *reason << " temporarily in use";
-    } else {
-        LOG_debug << "Sync resumed";
+        LOG_info << "Sync is now active";
     }
 }
 
 // sync update callbacks are for informational purposes only and must not
 // change or delete the sync itself
-void SyncApp::syncupdate_local_folder_addition(Sync* sync, const char* path)
+void SyncApp::syncupdate_local_folder_addition(Sync*, LocalNode *, const char* path)
 {
-    LOG_debug << "Sync - local folder addition detected: " << path;
+    LOG_info << "Sync - local folder addition detected: " << path;
 }
 
-void SyncApp::syncupdate_local_folder_deletion(Sync* sync, const char* path)
+void SyncApp::syncupdate_local_folder_deletion(Sync*, LocalNode *localNode)
 {
-    LOG_debug << "Sync - local folder deletion detected: " << path;
+    LOG_info << "Sync - local folder deletion detected: " << localNode->name;
 }
 
-void SyncApp::syncupdate_local_file_addition(Sync* sync, const char* path)
+void SyncApp::syncupdate_local_file_addition(Sync*, LocalNode *, const char* path)
 {
-    LOG_debug << "Sync - local file addition detected: " << path;
+    LOG_info << "Sync - local file addition detected: " << path;
 }
 
-void SyncApp::syncupdate_local_file_deletion(Sync* sync, const char* path)
+void SyncApp::syncupdate_local_file_deletion(Sync*, LocalNode *localNode)
 {
-    LOG_debug << "Sync - local file deletion detected: " << path;
+    LOG_info << "Sync - local file deletion detected: " << localNode->name;
 }
 
-void SyncApp::syncupdate_local_file_change(Sync* sync, const char* path)
+void SyncApp::syncupdate_local_file_change(Sync*, LocalNode *, const char* path)
 {
-    LOG_debug << "Sync - local file change detected: " << path;
+    LOG_info << "Sync - local file change detected: " << path;
 }
 
-void SyncApp::syncupdate_local_move(Sync*, const char* from, const char* to)
+void SyncApp::syncupdate_local_move(Sync*, LocalNode *localNode, const char* path)
 {
-    LOG_debug << "Sync - local rename/move " << from << " -> " << to;
+    LOG_info << "Sync - local rename/move " << localNode->name << " -> " << path;
 }
 
-void SyncApp::syncupdate_remote_move(string* from, string* to)
+void SyncApp::syncupdate_remote_move(Sync *, Node *n, Node *prevparent)
 {
-    LOG_debug << "Sync - remote rename/move " << *from << " -> " << *to;
+    LOG_info << "Sync - remote move " << n->displayname() << ": " << (prevparent ? prevparent->displayname() : "?") <<
+                 " -> " << (n->parent ? n->parent->displayname() : "?");
 }
 
-void SyncApp::syncupdate_remote_folder_addition(Node* n)
+void SyncApp::syncupdate_remote_rename(Sync *, Node *n, const char *prevname)
 {
-    LOG_debug << "Sync - remote folder addition detected " << n->displayname();
+    LOG_info << "Sync - remote rename " << prevname << " -> " << n->displayname();
 }
 
-void SyncApp::syncupdate_remote_file_addition(Node* n)
+void SyncApp::syncupdate_remote_folder_addition(Sync *, Node* n)
 {
-    LOG_debug << "Sync - remote file addition detected " << n->displayname();
+    LOG_info << "Sync - remote folder addition detected " << n->displayname();
 }
 
-void SyncApp::syncupdate_remote_folder_deletion(Node* n)
+void SyncApp::syncupdate_remote_file_addition(Sync*, Node* n)
 {
-    LOG_debug << "Sync - remote folder deletion detected " << n->displayname();
+    LOG_info << "Sync - remote file addition detected " << n->displayname();
 }
 
-void SyncApp::syncupdate_remote_file_deletion(Node* n)
+void SyncApp::syncupdate_remote_folder_deletion(Sync*, Node* n)
 {
-    LOG_debug << "Sync - remote file deletion detected " << n->displayname();
+    LOG_info << "Sync - remote folder deletion detected " << n->displayname();
 }
 
-void SyncApp::syncupdate_get(Sync*, const char* path)
+void SyncApp::syncupdate_remote_file_deletion(Sync*, Node* n)
 {
-    LOG_debug << "Sync - requesting file " << path;
+    LOG_info << "Sync - remote file deletion detected " << n->displayname();
 }
 
-void SyncApp::syncupdate_put(Sync*, const char* path)
+void SyncApp::syncupdate_get(Sync*, Node *, const char* path)
 {
-    LOG_debug  << "Sync - sending file " << path;
+    LOG_info << "Sync - requesting file " << path;
+}
+
+void SyncApp::syncupdate_put(Sync*, LocalNode*, const char* path)
+{
+    LOG_info  << "Sync - sending file " << path;
 }
 
 void SyncApp::syncupdate_remote_copy(Sync*, const char* name)
 {
-    LOG_debug << "Sync - creating remote file " << name << " by copying existing remote file";
+    LOG_info << "Sync - creating remote file " << name << " by copying existing remote file";
 }
 
 static const char* treestatename(treestate_t ts)
@@ -486,20 +480,18 @@ static const char* treestatename(treestate_t ts)
 
 void SyncApp::syncupdate_treestate(LocalNode* l)
 {
-#ifdef ENABLE_SYNC
-    LOG_debug << "Sync - state change of node " << l->name << " to " << treestatename(l->ts);
-#endif
+    LOG_info << "Sync - state change of node " << l->name << " to " << treestatename(l->ts);
 }
 
+#endif
 int main(int argc, char *argv[])
 {
 #ifndef ENABLE_SYNC
     cerr << "Synchronization features are disabled" << endl;
-    return 0;
+    return 1;
 #endif
 
     static byte pwkey[SymmCipher::KEYLENGTH];
-    bool is_active = true;
     SyncApp *app;
 
     // use logInfo level
@@ -510,6 +502,8 @@ int main(int argc, char *argv[])
     if (argc < 3)
     {
         LOG_info << "Usage: " << argv[0] << " [local folder] [remote folder]";
+        LOG_info << "Please set both MEGA_EMAIL and MEGA_PWD (password) env variables!";
+        LOG_info << "   (set MEGA_DEBUG to 1 or 2 to see debug output.";
         return 1;
     }
 
@@ -532,14 +526,18 @@ int main(int argc, char *argv[])
         if (!strcmp(getenv("MEGA_DEBUG"), "1") || !strcmp(getenv("MEGA_DEBUG"), "2"))
         {
             SimpleLogger::setLogLevel(logDebug);
+            SimpleLogger::setOutputSettings(logDebug, true, true, true);
         }
     }
+
+    // uncomment this line if you want to follow symbolic links
+    //client->followsymlinks = true;
 
     // get values from env
     client->pw_key(getenv("MEGA_PWD"), pwkey);
     client->login(getenv("MEGA_EMAIL"), pwkey);
 
-    while (is_active)
+    while (true)
     {
         // pass the CPU to the engine (nonblocking)
         client->exec();
