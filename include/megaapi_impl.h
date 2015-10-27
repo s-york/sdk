@@ -253,11 +253,14 @@ class MegaUserPrivate : public MegaUser
 		virtual const char* getEmail();
 		virtual int getVisibility();
 		virtual time_t getTimestamp();
+        virtual bool hasChanged(int changeType);
+        virtual int getChanges();
 
 	protected:
 		const char *email;
 		int visibility;
 		time_t ctime;
+        int changed;
 };
 
 class MegaSharePrivate : public MegaShare
