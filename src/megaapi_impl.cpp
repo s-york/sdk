@@ -620,7 +620,7 @@ MegaUserPrivate::MegaUserPrivate(MegaUser *user) : MegaUser()
 	email = MegaApi::strdup(user->getEmail());
 	visibility = user->getVisibility();
 	ctime = user->getTimestamp();
-    changed.auth = user->getChanges();
+    changed = user->getChanges();
 }
 
 MegaUser *MegaUserPrivate::fromUser(User *user)
